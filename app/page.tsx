@@ -5,11 +5,13 @@ import {
   CsvValidationResult,
   DataFactRow,
   GeneratedEmail,
+  OperationTokenRecord,
   PdfExtraction,
   QualitySummary,
 } from "@/lib/types";
 import { parseDataFactsToRows, serializeDataFacts } from "@/lib/dataFacts";
 import { summarise } from "@/lib/quality";
+import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
 import { Button, Section, Spinner } from "@/components/ui";
 import { PdfUpload } from "@/components/PdfUpload";
@@ -17,6 +19,7 @@ import { PromptEditor } from "@/components/PromptEditor";
 import { CsvUpload } from "@/components/CsvUpload";
 import { SummaryBar } from "@/components/SummaryBar";
 import { PreviewTable } from "@/components/PreviewTable";
+import { TokenCostPanel } from "@/components/TokenCostPanel";
 
 const BATCH_SIZES = [3, 5, 10, 25];
 const QC_CONCURRENCY = 4;
@@ -49,6 +52,9 @@ export default function Home() {
   const [qualityRun, setQualityRun] = useState(false);
   const [qualityVersion, setQualityVersion] = useState(0);
 
+  // Token usage accumulated across the session.
+  const [tokenRecords, setTokenRecords] = useState<OperationTokenRecord[]>([]);
+
   const generated = emails.length > 0;
   const generatedOk = useMemo(() => emails.filter((e) => e.status === "generated"), [emails]);
 
@@ -63,12 +69,20 @@ export default function Home() {
     [dataFactsRows]
   );
 
-  function handleExtracted(e: PdfExtraction, fileName: string) {
+  // Derived (not stored) — the full token/cost summary for the session.
+  const tokenSummary = useMemo(() => computeSessionSummary(tokenRecords), [tokenRecords]);
+
+  function handleExtracted(
+    e: PdfExtraction,
+    fileName: string,
+    tokenRecord?: OperationTokenRecord
+  ) {
     setExtraction(e);
     setPdfFileName(fileName);
     setPrompt(e.generation_prompt);
     setDataFactsRows(parseDataFactsToRows(e.data_facts_summary));
     setConfirmed(false);
+    if (tokenRecord) setTokenRecords((prev) => [...prev, tokenRecord]);
   }
 
   function scrollToStep(id: string) {
@@ -93,6 +107,7 @@ export default function Home() {
     setQualityRun(false);
     setQualityVersion(0);
     setGenProgress({ done: 0, total: 0 });
+    setTokenRecords([]);
     setPdfKey((k) => k + 1);
     setCsvKey((k) => k + 1);
     scrollToStep("step-1");
@@ -105,6 +120,8 @@ export default function Home() {
     setQualityRun(false);
     setQualityVersion(0);
     setGenProgress({ done: 0, total: 0 });
+    // Keep the PDF-extraction token record; drop generation/quality records.
+    setTokenRecords((prev) => prev.filter((r) => r.operation === "pdf_extraction"));
     setCsvKey((k) => k + 1);
     scrollToStep("step-3");
   }
@@ -118,6 +135,8 @@ export default function Home() {
     setQualityRun(false);
     setQualityVersion(0);
     setGenProgress({ done: 0, total: rows.length });
+    // Fresh run: drop any prior generation/quality token records, keep PDF.
+    setTokenRecords((prev) => prev.filter((r) => r.operation === "pdf_extraction"));
 
     const collected: GeneratedEmail[] = [];
     for (let i = 0; i < rows.length; i += batchSize) {
@@ -126,11 +145,13 @@ export default function Home() {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, rows: chunk }),
+          body: JSON.stringify({ prompt, rows: chunk, batchIndex: i / batchSize }),
         });
         const data = await res.json();
         const batchEmails: GeneratedEmail[] = data.emails ?? [];
         collected.push(...batchEmails);
+        const batchRecords: OperationTokenRecord[] = data.batch_token_records ?? [];
+        if (batchRecords.length) setTokenRecords((prev) => [...prev, ...batchRecords]);
       } catch (err: any) {
         chunk.forEach((row) =>
           collected.push({
@@ -155,6 +176,8 @@ export default function Home() {
   async function handleQualityCheck() {
     setQcRunning(true);
     setQcProgress({ done: 0, total: generatedOk.length });
+    // Clear any prior quality-check token records before this run.
+    setTokenRecords((prev) => prev.filter((r) => r.operation !== "quality_check_layer2"));
 
     const updated = [...emails];
     const indexByRow = new Map(updated.map((e, idx) => [e.rowIndex, idx]));
@@ -176,6 +199,8 @@ export default function Home() {
             if (idx !== undefined && data.quality) {
               updated[idx] = { ...updated[idx], quality: data.quality };
             }
+            const records: OperationTokenRecord[] = data.token_records ?? [];
+            if (records.length) setTokenRecords((prev) => [...prev, ...records]);
           } catch {
             // leave unevaluated; surfaces as no badge
           } finally {
@@ -359,6 +384,10 @@ export default function Home() {
                   style={{ width: `${genPct}%` }}
                 />
               </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Tokens used this session: {formatTokens(tokenSummary.breakdown.email_generation.total_tokens)}{" "}
+                · Estimated cost so far: ~{formatCost(tokenSummary.breakdown.email_generation.total_cost_usd)}
+              </p>
             </div>
           )}
         </Section>
@@ -426,6 +455,8 @@ export default function Home() {
       <footer className="mt-10 text-center text-xs text-slate-400">
         MVP · No auth · No database · Session-only state. Deploy on Vercel (keep batch size 10 on Hobby).
       </footer>
+
+      <TokenCostPanel summary={tokenSummary} />
     </main>
   );
 }

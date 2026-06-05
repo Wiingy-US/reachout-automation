@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { PdfExtraction } from "@/lib/types";
-import { Button, Spinner } from "./ui";
+import { OperationTokenRecord, PdfExtraction } from "@/lib/types";
+import { Spinner } from "./ui";
 
 export function PdfUpload({
   onExtracted,
   disabled,
 }: {
-  onExtracted: (e: PdfExtraction, fileName: string) => void;
+  onExtracted: (e: PdfExtraction, fileName: string, tokenRecord?: OperationTokenRecord) => void;
   disabled?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ export function PdfUpload({
       const res = await fetch("/api/extract-pdf", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Extraction failed");
-      onExtracted(data as PdfExtraction, file.name);
+      onExtracted(data as PdfExtraction, file.name, data.token_record as OperationTokenRecord | undefined);
     } catch (e: any) {
       setError(e?.message || "Extraction failed");
     } finally {

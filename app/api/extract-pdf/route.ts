@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractFromPdf } from "@/lib/gemini";
+import { toTokenRecord } from "@/lib/costs";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // Pro tier; Hobby caps at 10s (spec section 08)
@@ -22,8 +23,9 @@ export async function POST(req: NextRequest) {
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const base64 = bytes.toString("base64");
-    const extraction = await extractFromPdf(base64, "application/pdf");
-    return NextResponse.json(extraction);
+    const { extraction, usage } = await extractFromPdf(base64, "application/pdf");
+    const token_record = toTokenRecord("pdf_extraction", usage);
+    return NextResponse.json({ ...extraction, token_record });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "PDF extraction failed" },
