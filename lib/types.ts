@@ -71,3 +71,41 @@ export interface QualitySummary {
   fail: number;
   passRate: number; // 0-100
 }
+
+// ---- Token usage & cost tracking ----
+
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
+
+export interface CostEstimate {
+  input_cost_usd: number;
+  output_cost_usd: number;
+  total_cost_usd: number;
+}
+
+export interface OperationTokenRecord {
+  operation: "pdf_extraction" | "email_generation" | "quality_check_layer2";
+  batch_index?: number; // which batch this was (for generation)
+  journalist_email?: string; // which journalist (for quality check)
+  token_usage: TokenUsage;
+  cost_estimate: CostEstimate;
+  timestamp: string; // ISO string
+}
+
+export interface SessionTokenSummary {
+  records: OperationTokenRecord[];
+  totals: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    total_cost_usd: number;
+  };
+  breakdown: {
+    pdf_extraction: TokenUsage & CostEstimate;
+    email_generation: TokenUsage & CostEstimate;
+    quality_check: TokenUsage & CostEstimate;
+  };
+}

@@ -1,8 +1,8 @@
 // Server-side Gemini client + prompt builders (spec section 09).
 // The API key is read from the environment and never leaves the server.
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { JournalistRow, PdfExtraction } from "./types";
+import { GenerateContentResponse, GoogleGenerativeAI } from "@google/generative-ai";
+import { JournalistRow, PdfExtraction, TokenUsage } from "./types";
 import { LAYER2_CHECKS } from "./rubric";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -33,6 +33,31 @@ export function extractJson(text: string): any {
   return JSON.parse(t.slice(start, end + 1));
 }
 
+/**
+ * Pull token usage from a Gemini response's usageMetadata. Falls back to a
+ * rough length/4 estimate if the SDK doesn't surface metadata.
+ */
+export function extractTokenUsage(
+  response: GenerateContentResponse,
+  fallbackInput?: string,
+  fallbackOutput?: string
+): TokenUsage {
+  const meta = response.usageMetadata;
+  if (meta?.promptTokenCount !== undefined) {
+    const input = meta.promptTokenCount;
+    const output = meta.candidatesTokenCount ?? 0;
+    return {
+      input_tokens: input,
+      output_tokens: output,
+      total_tokens: meta.totalTokenCount ?? input + output,
+    };
+  }
+  // Fallback estimation (~4 chars per token).
+  const input = Math.round((fallbackInput?.length ?? 0) / 4);
+  const output = Math.round((fallbackOutput?.length ?? 0) / 4);
+  return { input_tokens: input, output_tokens: output, total_tokens: input + output };
+}
+
 // ---------------------------------------------------------------------------
 // 9.1 — PDF extraction
 // ---------------------------------------------------------------------------
@@ -51,7 +76,7 @@ const PDF_SYSTEM_INSTRUCTION = `You are a campaign analyst for a Digital PR agen
 export async function extractFromPdf(
   base64Pdf: string,
   mimeType = "application/pdf"
-): Promise<PdfExtraction> {
+): Promise<{ extraction: PdfExtraction; usage: TokenUsage }> {
   const model = getModel();
   const res = await model.generateContent({
     contents: [
@@ -65,13 +90,18 @@ export async function extractFromPdf(
     ],
     generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
   });
-  const json = extractJson(res.response.text());
+  const text = res.response.text();
+  const usage = extractTokenUsage(res.response, PDF_SYSTEM_INSTRUCTION, text);
+  const json = extractJson(text);
   if (typeof json.generation_prompt !== "string" || typeof json.data_facts_summary !== "string") {
     throw new Error("PDF extraction returned an unexpected shape");
   }
   return {
-    generation_prompt: json.generation_prompt,
-    data_facts_summary: json.data_facts_summary,
+    extraction: {
+      generation_prompt: json.generation_prompt,
+      data_facts_summary: json.data_facts_summary,
+    },
+    usage,
   };
 }
 
@@ -125,13 +155,15 @@ ${buildProfilesBlock(rows)}`;
 export async function generateBatch(
   basePrompt: string,
   rows: JournalistRow[]
-): Promise<string> {
+): Promise<{ raw: string; usage: TokenUsage }> {
   const model = getModel();
+  const promptText = buildGenerationPrompt(basePrompt, rows);
   const res = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: buildGenerationPrompt(basePrompt, rows) }] }],
+    contents: [{ role: "user", parts: [{ text: promptText }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 16384 },
   });
-  return res.response.text();
+  const raw = res.response.text();
+  return { raw, usage: extractTokenUsage(res.response, promptText, raw) };
 }
 
 // ---------------------------------------------------------------------------
@@ -198,15 +230,20 @@ OUTPUT SCHEMA (return exactly this shape):
 ${JUDGE_SCHEMA}`;
 }
 
-export async function runJudge(input: JudgeInput): Promise<JudgeOutput> {
+export async function runJudge(
+  input: JudgeInput
+): Promise<{ output: JudgeOutput; usage: TokenUsage }> {
   const model = getModel();
+  const promptText = buildJudgePrompt(input);
   const res = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: buildJudgePrompt(input) }] }],
+    contents: [{ role: "user", parts: [{ text: promptText }] }],
     generationConfig: { responseMimeType: "application/json", temperature: 0 },
   });
-  const json = extractJson(res.response.text());
+  const text = res.response.text();
+  const usage = extractTokenUsage(res.response, promptText, text);
+  const json = extractJson(text);
   if (!Array.isArray(json.checks)) {
     throw new Error("Judge response missing 'checks' array");
   }
-  return json as JudgeOutput;
+  return { output: json as JudgeOutput, usage };
 }

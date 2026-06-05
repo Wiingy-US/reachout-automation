@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateBatch } from "@/lib/gemini";
 import { parseGenerationOutput } from "@/lib/parse";
+import { toTokenRecord } from "@/lib/costs";
 import { GeneratedEmail, JournalistRow } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -9,6 +10,7 @@ export const maxDuration = 60;
 interface GenerateBody {
   prompt: string;
   rows: JournalistRow[];
+  batchIndex?: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { prompt, rows } = body;
+  const { prompt, rows, batchIndex } = body;
   if (!prompt || !Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json(
       { error: "prompt and a non-empty rows array are required" },
@@ -28,7 +30,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const raw = await generateBatch(prompt, rows);
+    const { raw, usage } = await generateBatch(prompt, rows);
+    // One token record per batch call (real tokens were billed even if the
+    // output later fails to parse).
+    const tokenRecord = toTokenRecord("email_generation", usage, { batch_index: batchIndex });
     const { blocks: parsed, delimiterFound, batchError } = parseGenerationOutput(raw);
 
     // Whole-response failure (empty / too short / no blocks): every row fails
@@ -49,7 +54,12 @@ export async function POST(req: NextRequest) {
         email_1_html: "",
         followup_html: "",
       }));
-      return NextResponse.json({ emails, batchError });
+      return NextResponse.json({
+        emails,
+        batchError,
+        token_record: tokenRecord,
+        batch_token_records: [tokenRecord],
+      });
     }
 
     const countMismatch = parsed.length !== rows.length;
@@ -108,7 +118,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ emails });
+    return NextResponse.json({
+      emails,
+      token_record: tokenRecord,
+      batch_token_records: [tokenRecord],
+    });
   } catch (err: any) {
     // The Gemini call (or our client) threw — surface the real message/status
     // (network error, 429 rate limit, quota, invalid API key, …) rather than a
@@ -127,6 +141,11 @@ export async function POST(req: NextRequest) {
       email_1_html: "",
       followup_html: "",
     }));
-    return NextResponse.json({ emails, batchError: reason }, { status: 200 });
+    // The Gemini call threw, so no usage metadata is available — no token
+    // record for this batch (failed rows contribute 0 tokens).
+    return NextResponse.json(
+      { emails, batchError: reason, batch_token_records: [] },
+      { status: 200 }
+    );
   }
 }
