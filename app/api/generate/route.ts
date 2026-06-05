@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const raw = await generateBatch(prompt, rows);
-    const parsed = parseGenerationOutput(raw);
+    const { blocks: parsed, delimiterFound } = parseGenerationOutput(raw);
+
+    const countMismatch = parsed.length !== rows.length;
 
     // Map parsed blocks back to the requested rows. Prefer matching by the id
     // the model echoed; fall back to positional order.
@@ -45,11 +47,17 @@ export async function POST(req: NextRequest) {
         (match.email_1_html?.length || 0) > 0 &&
         (match.subject?.length || 0) > 0;
       if (!ok) {
+        // Prefer the specific reason from the parser (e.g. which section was
+        // dropped); otherwise note a block/journalist count mismatch.
+        let reason = match?.error_reason || "Model returned no usable output for this row";
+        if (!match && countMismatch) {
+          reason = `No block returned for this row (parser found ${parsed.length} block(s) for ${rows.length} journalist(s))`;
+        }
         return {
           rowIndex: row._rowIndex,
           journalist: row,
           status: "generation_failed",
-          error: "Model returned no usable output for this row",
+          error: reason,
           verification_summary: "",
           subject: "",
           email_1_html: "",
@@ -66,6 +74,18 @@ export async function POST(req: NextRequest) {
         followup_html: match.followup_html,
       };
     });
+
+    // Diagnostic logging when anything in this batch failed — visible in
+    // Vercel Function Logs.
+    const failedCount = emails.filter((e) => e.status === "generation_failed").length;
+    if (failedCount > 0) {
+      console.log(
+        `[generate] batch had failures — journalists sent: ${rows.length}, ` +
+          `blocks parsed: ${parsed.length}, delimiterFound: ${delimiterFound}, ` +
+          `failed rows: ${failedCount}. Raw response (first 300 chars):\n` +
+          raw.slice(0, 300)
+      );
+    }
 
     return NextResponse.json({ emails });
   } catch (err: any) {

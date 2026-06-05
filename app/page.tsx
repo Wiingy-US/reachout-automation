@@ -16,7 +16,7 @@ import { CsvUpload } from "@/components/CsvUpload";
 import { SummaryBar } from "@/components/SummaryBar";
 import { PreviewTable } from "@/components/PreviewTable";
 
-const BATCH_SIZES = [10, 25, 50, 100, 200];
+const BATCH_SIZES = [3, 5, 10, 25];
 const QC_CONCURRENCY = 4;
 
 export default function Home() {
@@ -30,7 +30,7 @@ export default function Home() {
   const [csv, setCsv] = useState<CsvValidationResult | null>(null);
 
   // Step 4/5 — generation
-  const [batchSize, setBatchSize] = useState(10);
+  const [batchSize, setBatchSize] = useState(5);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState({ done: 0, total: 0 });
   const [emails, setEmails] = useState<GeneratedEmail[]>([]);
@@ -220,7 +220,7 @@ export default function Home() {
         <Section
           step={4}
           title="Select batch size & generate"
-          subtitle="Default batch size 10 to stay under the Vercel Hobby 10s function timeout."
+          subtitle="Default batch size 5 to stay under the Vercel Hobby 10s function timeout."
           done={generated && !generating}
         >
           <div className="flex flex-wrap items-center gap-3">
@@ -237,6 +237,9 @@ export default function Home() {
                 </option>
               ))}
             </select>
+            <span className="w-full text-xs text-slate-400">
+              Smaller batches are more reliable. 5 is recommended.
+            </span>
             <Button
               onClick={handleGenerate}
               disabled={
