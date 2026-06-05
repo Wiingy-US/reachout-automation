@@ -129,7 +129,7 @@ export async function generateBatch(
   const model = getModel();
   const res = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: buildGenerationPrompt(basePrompt, rows) }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 16384 },
   });
   return res.response.text();
 }

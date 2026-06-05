@@ -29,7 +29,30 @@ export async function POST(req: NextRequest) {
 
   try {
     const raw = await generateBatch(prompt, rows);
-    const parsed = parseGenerationOutput(raw);
+    const { blocks: parsed, delimiterFound, batchError } = parseGenerationOutput(raw);
+
+    // Whole-response failure (empty / too short / no blocks): every row fails
+    // with the specific reason.
+    if (batchError) {
+      console.log(
+        `[generate] batch unusable — journalists sent: ${rows.length}, ` +
+          `reason: ${batchError}. Raw response (first 300 chars):\n` +
+          raw.slice(0, 300)
+      );
+      const emails: GeneratedEmail[] = rows.map((row) => ({
+        rowIndex: row._rowIndex,
+        journalist: row,
+        status: "generation_failed",
+        error: batchError,
+        verification_summary: "",
+        subject: "",
+        email_1_html: "",
+        followup_html: "",
+      }));
+      return NextResponse.json({ emails, batchError });
+    }
+
+    const countMismatch = parsed.length !== rows.length;
 
     // Map parsed blocks back to the requested rows. Prefer matching by the id
     // the model echoed; fall back to positional order.
@@ -45,11 +68,17 @@ export async function POST(req: NextRequest) {
         (match.email_1_html?.length || 0) > 0 &&
         (match.subject?.length || 0) > 0;
       if (!ok) {
+        // Prefer the specific reason from the parser (e.g. which section was
+        // dropped); otherwise note a block/journalist count mismatch.
+        let reason = match?.error_reason || "Model returned no usable output for this row";
+        if (!match && countMismatch) {
+          reason = `No journalist block returned for this row — possible truncation (parser found ${parsed.length} block(s) for ${rows.length} journalist(s))`;
+        }
         return {
           rowIndex: row._rowIndex,
           journalist: row,
           status: "generation_failed",
-          error: "Model returned no usable output for this row",
+          error: reason,
           verification_summary: "",
           subject: "",
           email_1_html: "",
@@ -67,20 +96,37 @@ export async function POST(req: NextRequest) {
       };
     });
 
+    // Diagnostic logging when anything in this batch failed — visible in
+    // Vercel Function Logs.
+    const failedCount = emails.filter((e) => e.status === "generation_failed").length;
+    if (failedCount > 0) {
+      console.log(
+        `[generate] batch had failures — journalists sent: ${rows.length}, ` +
+          `blocks parsed: ${parsed.length}, delimiterFound: ${delimiterFound}, ` +
+          `failed rows: ${failedCount}. Raw response (first 300 chars):\n` +
+          raw.slice(0, 300)
+      );
+    }
+
     return NextResponse.json({ emails });
   } catch (err: any) {
-    // Whole-batch failure: mark every row in the batch as failed so the client
-    // can flag them inline and keep going (spec 4.1).
+    // The Gemini call (or our client) threw — surface the real message/status
+    // (network error, 429 rate limit, quota, invalid API key, …) rather than a
+    // generic string. Mark every row failed so the client flags them inline and
+    // keeps going (spec 4.1).
+    const detail = err?.message || err?.toString?.() || "unknown error";
+    const reason = `Gemini API error: ${detail}`;
+    console.log(`[generate] Gemini call failed for batch of ${rows.length}: ${detail}`);
     const emails: GeneratedEmail[] = rows.map((row) => ({
       rowIndex: row._rowIndex,
       journalist: row,
       status: "generation_failed",
-      error: err?.message || "Batch generation failed",
+      error: reason,
       verification_summary: "",
       subject: "",
       email_1_html: "",
       followup_html: "",
     }));
-    return NextResponse.json({ emails, batchError: err?.message }, { status: 200 });
+    return NextResponse.json({ emails, batchError: reason }, { status: 200 });
   }
 }

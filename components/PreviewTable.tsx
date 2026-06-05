@@ -54,11 +54,31 @@ function ChecklistSection({ title, checks }: { title: string; checks: CheckResul
   );
 }
 
+function failureHint(reason: string): string | null {
+  const r = reason.toLowerCase();
+  if (r.includes("429") || r.includes("quota") || r.includes("rate limit")) {
+    return "Tip: wait 60 seconds and retry — API rate limit reached.";
+  }
+  if (r.includes("api key")) {
+    return "Tip: check that GEMINI_API_KEY is correctly set in Vercel environment variables.";
+  }
+  if (r.includes("truncation") || r.includes("missing section")) {
+    return "Tip: reduce batch size and retry generation.";
+  }
+  return null;
+}
+
 function Drawer({ email }: { email: GeneratedEmail }) {
   if (email.status === "generation_failed") {
+    const reason = email.error || "Unknown error";
+    const hint = failureHint(reason);
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        <strong>Generation failed:</strong> {email.error || "Unknown error"}
+      <div>
+        <div className="mb-2 text-sm font-bold text-red-700">Generation failed</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 font-mono text-xs text-red-800">
+          {reason}
+        </div>
+        {hint && <p className="mt-2 text-xs font-medium text-amber-700">{hint}</p>}
       </div>
     );
   }

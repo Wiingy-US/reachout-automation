@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import {
   CsvValidationResult,
+  DataFactRow,
   GeneratedEmail,
   PdfExtraction,
   QualitySummary,
 } from "@/lib/types";
+import { parseDataFactsToRows, serializeDataFacts } from "@/lib/dataFacts";
 import { summarise } from "@/lib/quality";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
 import { Button, Section, Spinner } from "@/components/ui";
@@ -16,21 +18,27 @@ import { CsvUpload } from "@/components/CsvUpload";
 import { SummaryBar } from "@/components/SummaryBar";
 import { PreviewTable } from "@/components/PreviewTable";
 
-const BATCH_SIZES = [10, 25, 50, 100, 200];
+const BATCH_SIZES = [3, 5, 10, 25];
 const QC_CONCURRENCY = 4;
 
 export default function Home() {
   // Step 1/2 — PDF + prompt
   const [extraction, setExtraction] = useState<PdfExtraction | null>(null);
+  const [pdfFileName, setPdfFileName] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [dataFacts, setDataFacts] = useState("");
+  const [dataFactsRows, setDataFactsRows] = useState<DataFactRow[]>([]);
   const [confirmed, setConfirmed] = useState(false);
 
   // Step 3 — CSV
   const [csv, setCsv] = useState<CsvValidationResult | null>(null);
 
+  // Remount keys for the upload widgets so "Re-upload" returns them to a clean
+  // initial state.
+  const [pdfKey, setPdfKey] = useState(0);
+  const [csvKey, setCsvKey] = useState(0);
+
   // Step 4/5 — generation
-  const [batchSize, setBatchSize] = useState(10);
+  const [batchSize, setBatchSize] = useState(5);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState({ done: 0, total: 0 });
   const [emails, setEmails] = useState<GeneratedEmail[]>([]);
@@ -48,11 +56,57 @@ export default function Home() {
     ? summarise(emails.map((e) => e.quality))
     : null;
 
-  function handleExtracted(e: PdfExtraction) {
+  // Plain-text summary passed to the quality-check engine (its interface is
+  // unchanged — it still receives a string).
+  const dataFactsSerialized = useMemo(
+    () => serializeDataFacts(dataFactsRows),
+    [dataFactsRows]
+  );
+
+  function handleExtracted(e: PdfExtraction, fileName: string) {
     setExtraction(e);
+    setPdfFileName(fileName);
     setPrompt(e.generation_prompt);
-    setDataFacts(e.data_facts_summary);
+    setDataFactsRows(parseDataFactsToRows(e.data_facts_summary));
     setConfirmed(false);
+  }
+
+  function scrollToStep(id: string) {
+    requestAnimationFrame(() =>
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }
+
+  // ---- Change 1: re-upload / reset handlers ----
+  // Re-uploading the PDF resets everything downstream (prompt, data facts, CSV,
+  // emails, quality). Re-uploading the CSV keeps the PDF extraction and resets
+  // only generation + quality.
+  function resetFromPdf() {
+    if (generated && !window.confirm("This will clear all generated emails. Are you sure?")) return;
+    setExtraction(null);
+    setPdfFileName(null);
+    setPrompt("");
+    setDataFactsRows([]);
+    setConfirmed(false);
+    setCsv(null);
+    setEmails([]);
+    setQualityRun(false);
+    setQualityVersion(0);
+    setGenProgress({ done: 0, total: 0 });
+    setPdfKey((k) => k + 1);
+    setCsvKey((k) => k + 1);
+    scrollToStep("step-1");
+  }
+
+  function resetFromCsv() {
+    if (generated && !window.confirm("This will clear all generated emails. Are you sure?")) return;
+    setCsv(null);
+    setEmails([]);
+    setQualityRun(false);
+    setQualityVersion(0);
+    setGenProgress({ done: 0, total: 0 });
+    setCsvKey((k) => k + 1);
+    scrollToStep("step-3");
   }
 
   // ---- Step 4/5: batch generation ----
@@ -115,7 +169,7 @@ export default function Home() {
             const res = await fetch("/api/quality-check", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, dataFactsSummary: dataFacts }),
+              body: JSON.stringify({ email, dataFactsSummary: dataFactsSerialized }),
             });
             const data = await res.json();
             const idx = indexByRow.get(email.rowIndex);
@@ -181,18 +235,35 @@ export default function Home() {
         {/* Step 1 + 2 */}
         <Section
           step={1}
+          id="step-1"
           title="Upload research report PDF & review prompt"
           subtitle="Gemini extracts a generation prompt and a data-facts summary. Both are editable."
           done={confirmed}
         >
-          <PdfUpload onExtracted={handleExtracted} disabled={generating || qcRunning} />
+          {extraction ? (
+            <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="text-sm text-slate-600">
+                ✓ Extracted from <span className="font-medium text-slate-800">{pdfFileName || "PDF"}</span>
+              </span>
+              <button
+                type="button"
+                onClick={resetFromPdf}
+                disabled={generating || qcRunning}
+                className="text-xs font-medium text-brand underline-offset-2 hover:underline disabled:opacity-40"
+              >
+                Change PDF
+              </button>
+            </div>
+          ) : (
+            <PdfUpload key={pdfKey} onExtracted={handleExtracted} disabled={generating || qcRunning} />
+          )}
           {extraction && (
             <div className="mt-4 space-y-4">
               <PromptEditor
                 prompt={prompt}
-                dataFacts={dataFacts}
+                dataFactsRows={dataFactsRows}
                 onPromptChange={setPrompt}
-                onDataFactsChange={setDataFacts}
+                onDataFactsRowsChange={setDataFactsRows}
                 disabled={generating || qcRunning}
               />
               <Button
@@ -209,18 +280,31 @@ export default function Home() {
         {/* Step 3 */}
         <Section
           step={3}
+          id="step-3"
           title="Upload journalist CSV"
           subtitle="Up to 200 rows. Required columns are validated; rows missing critical fields are flagged."
           done={!!csv && csv.missingColumns.length === 0}
         >
-          <CsvUpload onParsed={setCsv} disabled={generating || qcRunning} />
+          <CsvUpload key={csvKey} onParsed={setCsv} disabled={generating || qcRunning} />
+          {csv && (
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={resetFromCsv}
+                disabled={generating || qcRunning}
+                className="text-xs font-medium text-brand underline-offset-2 hover:underline disabled:opacity-40"
+              >
+                Change CSV
+              </button>
+            </div>
+          )}
         </Section>
 
         {/* Step 4/5 */}
         <Section
           step={4}
           title="Select batch size & generate"
-          subtitle="Default batch size 10 to stay under the Vercel Hobby 10s function timeout."
+          subtitle="Default batch size 5 to stay under the Vercel Hobby 10s function timeout."
           done={generated && !generating}
         >
           <div className="flex flex-wrap items-center gap-3">
@@ -237,6 +321,9 @@ export default function Home() {
                 </option>
               ))}
             </select>
+            <span className="w-full text-xs text-slate-400">
+              Smaller batches are more reliable. 5 is recommended.
+            </span>
             <Button
               onClick={handleGenerate}
               disabled={
