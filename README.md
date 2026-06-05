@@ -36,7 +36,7 @@ Get a Gemini API key at https://aistudio.google.com/app/apikey.
 | Variable         | Required | Default            | Notes                                   |
 | ---------------- | -------- | ------------------ | --------------------------------------- |
 | `GEMINI_API_KEY` | yes      | —                  | Server-side only, never sent to browser |
-| `GEMINI_MODEL`   | no       | `gemini-1.5-flash` | Used for all three call types           |
+| `GEMINI_MODEL`   | no       | `gemini-2.5-flash` | Used for all three call types           |
 
 ## Scripts
 

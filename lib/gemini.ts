@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { JournalistRow, PdfExtraction } from "./types";
 import { LAYER2_CHECKS } from "./rubric";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 function client(): GoogleGenerativeAI {
   const key = process.env.GEMINI_API_KEY;
