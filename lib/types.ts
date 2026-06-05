@@ -25,6 +25,14 @@ export interface PdfExtraction {
   data_facts_summary: string;
 }
 
+// One editable row in the Data Facts table (UI source of truth before being
+// serialised back to a plain string for the quality-check engine).
+export interface DataFactRow {
+  stat: string;
+  category: string;
+  source: string;
+}
+
 export type GenerationStatus = "generated" | "generation_failed";
 
 export interface GeneratedEmail {

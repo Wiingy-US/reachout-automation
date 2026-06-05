@@ -1,21 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { DataFactRow } from "@/lib/types";
+import { DataFactsTable } from "./DataFactsTable";
 
 export function PromptEditor({
   prompt,
-  dataFacts,
+  dataFactsRows,
   onPromptChange,
-  onDataFactsChange,
+  onDataFactsRowsChange,
   disabled,
 }: {
   prompt: string;
-  dataFacts: string;
+  dataFactsRows: DataFactRow[];
   onPromptChange: (v: string) => void;
-  onDataFactsChange: (v: string) => void;
+  onDataFactsRowsChange: (rows: DataFactRow[]) => void;
   disabled?: boolean;
 }) {
   const [factsOpen, setFactsOpen] = useState(false);
+  const factCount = dataFactsRows.filter((r) => r.stat.trim()).length;
 
   return (
     <div className="space-y-4">
@@ -39,21 +42,20 @@ export function PromptEditor({
           className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
         >
           <span>
-            Data Facts Summary — ground truth for quality check ({dataFacts.trim().split(/\s+/).filter(Boolean).length} words)
+            Data Facts Summary — ground truth for quality check ({factCount} fact{factCount === 1 ? "" : "s"})
           </span>
           <span className={`transition ${factsOpen ? "rotate-180" : ""}`}>▾</span>
         </button>
         {factsOpen && (
           <div className="border-t border-slate-100 p-3">
-            <textarea
-              value={dataFacts}
-              onChange={(e) => onDataFactsChange(e.target.value)}
+            <DataFactsTable
+              rows={dataFactsRows}
+              onChange={onDataFactsRowsChange}
               disabled={disabled}
-              rows={10}
-              className="code-area w-full rounded-lg border border-slate-300 p-3 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
             />
-            <p className="mt-1 text-xs text-slate-400">
-              Used verbatim by the quality-check judge (MAIN-01) to verify the emails only cite facts present in the PDF.
+            <p className="mt-2 text-xs text-slate-400">
+              Edit, add, or remove facts. On confirm these are serialised into the plain-text summary
+              used verbatim by the quality-check judge (MAIN-01) to verify emails only cite facts present in the PDF.
             </p>
           </div>
         )}

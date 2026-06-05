@@ -19,7 +19,13 @@ export interface ParsedJournalist {
 export interface ParseResult {
   blocks: ParsedJournalist[];
   delimiterFound: boolean;
+  // Set when the whole response is unusable (empty / too short / no blocks) —
+  // every row in the batch should fail with this reason.
+  batchError?: string;
 }
+
+// Below this length a delimiter-less response is treated as truncated junk.
+const MIN_USABLE_CHARS = 40;
 
 const SECTION_LABELS = ["ID", "VERIFICATION", "SUBJECT", "EMAIL1_HTML", "FOLLOWUP1_HTML"];
 // Sections that must be present and non-empty for a block to be usable.
@@ -37,23 +43,29 @@ function extractSection(block: string, label: string): string {
 }
 
 export function parseGenerationOutput(raw: string): ParseResult {
-  const rawBlocks: string[] = [];
   const delimiterFound = raw.includes(JOURNALIST_START);
+  const trimmed = raw.trim();
 
-  if (delimiterFound) {
-    const parts = raw.split(JOURNALIST_START).slice(1);
-    for (const p of parts) {
-      rawBlocks.push(p.split(JOURNALIST_END)[0]);
-    }
-  } else {
-    // Fallback: no delimiters at all — likely truncated/malformed output.
-    // Log a sample of what Gemini actually returned so we can diagnose.
+  // Batch-level failures: the whole response is unusable.
+  if (!trimmed) {
+    return { blocks: [], delimiterFound: false, batchError: "Empty response from model" };
+  }
+  if (!delimiterFound) {
     console.warn(
       "[parse] No ---JOURNALIST_START--- delimiters found in Gemini output. First 500 chars:\n" +
         raw.slice(0, 500)
     );
-    rawBlocks.push(raw);
+    const batchError =
+      trimmed.length < MIN_USABLE_CHARS
+        ? `Model response too short to contain valid output (${trimmed.length} chars)`
+        : "No journalist blocks found in model response — possible truncation";
+    return { blocks: [], delimiterFound: false, batchError };
   }
+
+  const rawBlocks: string[] = raw
+    .split(JOURNALIST_START)
+    .slice(1)
+    .map((p) => p.split(JOURNALIST_END)[0]);
 
   const blocks = rawBlocks.map((block) => {
     const idRaw = extractSection(block, "ID");
@@ -80,9 +92,7 @@ export function parseGenerationOutput(raw: string): ParseResult {
       followup_html,
       missingSections,
       error_reason:
-        missingSections.length > 0
-          ? `Missing section: ${missingSections.join(", ")}`
-          : undefined,
+        missingSections.length > 0 ? `Missing section: ${missingSections[0]}` : undefined,
     };
   });
 

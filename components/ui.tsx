@@ -8,15 +8,17 @@ export function Section({
   subtitle,
   done,
   children,
+  id,
 }: {
   step: number;
   title: string;
   subtitle?: string;
   done?: boolean;
   children: ReactNode;
+  id?: string;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <section id={id} className="scroll-mt-4 rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
