@@ -20,19 +20,6 @@ export interface CsvValidationResult {
   invalidRows: { rowIndex: number; missing: string[] }[];
 }
 
-export interface PdfExtraction {
-  generation_prompt: string;
-  data_facts_summary: string;
-}
-
-// One editable row in the Data Facts table (UI source of truth before being
-// serialised back to a plain string for the quality-check engine).
-export interface DataFactRow {
-  stat: string;
-  category: string;
-  source: string;
-}
-
 export type GenerationStatus = "generated" | "generation_failed";
 
 export interface GeneratedEmail {
@@ -87,7 +74,7 @@ export interface CostEstimate {
 }
 
 export interface OperationTokenRecord {
-  operation: "pdf_extraction" | "email_generation" | "quality_check_layer2";
+  operation: "email_generation" | "quality_check_layer2";
   batch_index?: number; // which batch this was (for generation)
   journalist_email?: string; // which journalist (for quality check)
   token_usage: TokenUsage;
@@ -104,7 +91,6 @@ export interface SessionTokenSummary {
     total_cost_usd: number;
   };
   breakdown: {
-    pdf_extraction: TokenUsage & CostEstimate;
     email_generation: TokenUsage & CostEstimate;
     quality_check: TokenUsage & CostEstimate;
   };

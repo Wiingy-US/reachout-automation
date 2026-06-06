@@ -81,7 +81,6 @@ function accumulate(
 
 /** Derive the full session summary from the accumulated token records. */
 export function computeSessionSummary(records: OperationTokenRecord[]): SessionTokenSummary {
-  const pdf = { ...EMPTY };
   const gen = { ...EMPTY };
   const qc = { ...EMPTY };
   let input = 0;
@@ -94,8 +93,7 @@ export function computeSessionSummary(records: OperationTokenRecord[]): SessionT
     output += r.token_usage.output_tokens;
     total += r.token_usage.total_tokens;
     cost += r.cost_estimate.total_cost_usd;
-    if (r.operation === "pdf_extraction") Object.assign(pdf, accumulate(pdf, r));
-    else if (r.operation === "email_generation") Object.assign(gen, accumulate(gen, r));
+    if (r.operation === "email_generation") Object.assign(gen, accumulate(gen, r));
     else if (r.operation === "quality_check_layer2") Object.assign(qc, accumulate(qc, r));
   }
 
@@ -108,7 +106,6 @@ export function computeSessionSummary(records: OperationTokenRecord[]): SessionT
       total_cost_usd: cost,
     },
     breakdown: {
-      pdf_extraction: pdf,
       email_generation: gen,
       quality_check: qc,
     },

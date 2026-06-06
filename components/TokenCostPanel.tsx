@@ -43,7 +43,6 @@ export function TokenCostPanel({ summary }: { summary: SessionTokenSummary }) {
               </tr>
             </thead>
             <tbody>
-              <BreakdownRow label="PDF Extraction" row={breakdown.pdf_extraction} />
               <BreakdownRow label="Email Generation" row={breakdown.email_generation} />
               <BreakdownRow label="Quality Check" row={breakdown.quality_check} />
             </tbody>
