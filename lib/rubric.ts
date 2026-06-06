@@ -1,4 +1,4 @@
-// The 22-check quality rubric (spec section 05).
+// The 19-check quality rubric (spec section 05).
 //
 // Layer 1 (deterministic, 12 checks) is evaluated server-side with pure
 // string/regex/HTML parsing — see lib/deterministicChecks.ts.
@@ -14,7 +14,6 @@ export const RUBRIC_CONFIG = {
   subjectMaxWords: 12,
   mainMaxWords: 220,
   followupMaxWords: 100,
-  maxBolds: 7,
   introMaxSentences: 5,
 };
 
@@ -67,13 +66,6 @@ export const RUBRIC: RubricCheck[] = [
     idealAnswer: "Yes",
   },
   {
-    id: "MAIN-08",
-    layer: 1,
-    target: "main",
-    question: `Does the email contain at least one bolded sentence (and no more than ${RUBRIC_CONFIG.maxBolds} bolds)?`,
-    idealAnswer: "Yes",
-  },
-  {
     id: "MAIN-10",
     layer: 1,
     target: "main",
@@ -102,13 +94,6 @@ export const RUBRIC: RubricCheck[] = [
     idealAnswer: "No",
   },
   {
-    id: "FUP-05",
-    layer: 1,
-    target: "followup",
-    question: `Does the follow-up contain at least one bolded sentence (and no more than ${RUBRIC_CONFIG.maxBolds} bolds)?`,
-    idealAnswer: "Yes",
-  },
-  {
     id: "FUP-07",
     layer: 1,
     target: "followup",
@@ -123,13 +108,6 @@ export const RUBRIC: RubricCheck[] = [
     target: "main",
     question:
       "Do ALL statistics, percentages and data points in the email appear in the PERMITTED DATA FACTS? (no hallucinated or altered numbers)",
-    idealAnswer: "Yes",
-  },
-  {
-    id: "MAIN-05",
-    layer: 2,
-    target: "main",
-    question: "Is every statistic or factual claim in the email attributed to a source / citation?",
     idealAnswer: "Yes",
   },
   {

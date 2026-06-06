@@ -4,13 +4,7 @@
 
 import { CheckResult, GeneratedEmail } from "./types";
 import { LAYER1_CHECKS, RUBRIC_CONFIG } from "./rubric";
-import {
-  countBolds,
-  hasEmDash,
-  mentionsPdf,
-  stripHtml,
-  wordCount,
-} from "./htmlUtils";
+import { hasEmDash, mentionsPdf, stripHtml, wordCount } from "./htmlUtils";
 
 function result(
   check_id: string,
@@ -75,16 +69,6 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     out.push(result("MAIN-07", q("MAIN-07"), pass, pass ? "Yes" : `No — missing ${missing.join(", ")}`));
   }
 
-  // MAIN-08 — bolded sentence present, within max
-  {
-    const n = countBolds(main);
-    const pass = n >= 1 && n <= RUBRIC_CONFIG.maxBolds;
-    let answer = `Yes — ${n} bold(s)`;
-    if (n === 0) answer = "No — no bolded sentence";
-    else if (n > RUBRIC_CONFIG.maxBolds) answer = `No — ${n} bolds (max ${RUBRIC_CONFIG.maxBolds})`;
-    out.push(result("MAIN-08", q("MAIN-08"), pass, answer));
-  }
-
   // MAIN-10 — literal "pdf"
   {
     const has = mentionsPdf(main);
@@ -111,15 +95,6 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     out.push(result("FUP-02", q("FUP-02"), !has, has ? "Yes — em dash present" : "No"));
   }
 
-  // FUP-05 — bolded sentence present, within max
-  {
-    const n = countBolds(fup);
-    const pass = n >= 1 && n <= RUBRIC_CONFIG.maxBolds;
-    let answer = `Yes — ${n} bold(s)`;
-    if (n === 0) answer = "No — no bolded sentence";
-    else if (n > RUBRIC_CONFIG.maxBolds) answer = `No — ${n} bolds (max ${RUBRIC_CONFIG.maxBolds})`;
-    out.push(result("FUP-05", q("FUP-05"), pass, answer));
-  }
 
   // FUP-07 — literal "pdf"
   {
