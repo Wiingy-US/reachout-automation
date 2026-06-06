@@ -1,25 +1,23 @@
 # Digital PR Outreach — MVP
 
-Single-session, stateless web tool that turns a campaign research report PDF into
-up to 200 personalised journalist pitch emails, runs a 22-check quality rubric
-over them, and exports an AppScript-ready CSV. No login, no database — when you
-close the tab, everything is gone.
+Single-session, stateless web tool that turns a generation prompt + data facts
+summary into up to 200 personalised journalist pitch emails, runs a 22-check
+quality rubric over them, and exports an AppScript-ready CSV. No login, no
+database — when you close the tab, everything is gone.
 
-> Built to the **Digital PR Outreach MVP Spec v1.0**. The full core loop is here:
-> **PDF in → generation prompt + data facts out → personalised emails out →
-> quality verdict out → CSV out.**
+> The core loop: **prompt + data facts in → personalised emails out → quality
+> verdict out → CSV out.**
 
 ## The flow
 
-1. **Upload research report PDF** — Gemini extracts a `generation_prompt` and a
-   `data_facts_summary` (both editable).
-2. **Review & confirm** the prompt and data facts.
-3. **Upload journalist CSV** (≤ 200 rows) — required columns are validated.
-4. **Pick batch size & generate** — batched Gemini calls with a live progress bar.
-5. **Review** generated emails in the preview table (HTML rendered in sandboxed iframes).
-6. **Run quality check** — Layer 1 deterministic checks server-side, then the
+1. **Campaign setup** — paste the `generation_prompt` and the `data_facts_summary`
+   (both manual, entered by you).
+2. **Upload journalist CSV** (≤ 200 rows) — required columns are validated.
+3. **Pick batch size & generate** — batched Gemini calls with a live progress bar.
+4. **Review** generated emails in the preview table (HTML rendered in sandboxed iframes).
+5. **Run quality check** — Layer 1 deterministic checks server-side, then the
    Layer 2 LLM judge for rows that pass Layer 1.
-7. **Download CSV** — all emails plus `quality_check_status` and `failed_checks`.
+6. **Download CSV** — all emails plus `quality_check_status` and `failed_checks`.
 
 ## Setup
 
@@ -36,7 +34,7 @@ Get a Gemini API key at https://aistudio.google.com/app/apikey.
 | Variable         | Required | Default            | Notes                                   |
 | ---------------- | -------- | ------------------ | --------------------------------------- |
 | `GEMINI_API_KEY` | yes      | —                  | Server-side only, never sent to browser |
-| `GEMINI_MODEL`   | no       | `gemini-2.5-flash` | Used for all three call types           |
+| `GEMINI_MODEL`   | no       | `gemini-2.5-flash` | Used for generation + quality check     |
 
 ## Scripts
 
@@ -60,12 +58,11 @@ on upload but not dropped.
 ```
 app/
   page.tsx                  # single-page orchestrator (all session state)
-  api/extract-pdf/route.ts  # 9.1 PDF → prompt + data facts
-  api/generate/route.ts     # 9.2 batch email generation
-  api/quality-check/route.ts# 9.3 Layer 1 + Layer 2 per email
-components/                  # PdfUpload, PromptEditor, CsvUpload, PreviewTable, …
+  api/generate/route.ts     # batch email generation
+  api/quality-check/route.ts# Layer 1 + Layer 2 per email
+components/                  # StepIndicator, CsvUpload, PreviewTable, TokenCostPanel, …
 lib/
-  gemini.ts                 # Gemini client + the three prompt designs
+  gemini.ts                 # Gemini client + generation/judge prompts
   parse.ts                  # delimited batch-output parser
   rubric.ts                 # the 22 checks + tunable thresholds
   deterministicChecks.ts    # Layer 1 engine (no AI)

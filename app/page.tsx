@@ -3,19 +3,15 @@
 import { useMemo, useState } from "react";
 import {
   CsvValidationResult,
-  DataFactRow,
   GeneratedEmail,
   OperationTokenRecord,
-  PdfExtraction,
   QualitySummary,
 } from "@/lib/types";
-import { parseDataFactsToRows, serializeDataFacts } from "@/lib/dataFacts";
 import { summarise } from "@/lib/quality";
 import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
 import { Button, Section, Spinner } from "@/components/ui";
-import { PdfUpload } from "@/components/PdfUpload";
-import { PromptEditor } from "@/components/PromptEditor";
+import { StepIndicator } from "@/components/StepIndicator";
 import { CsvUpload } from "@/components/CsvUpload";
 import { SummaryBar } from "@/components/SummaryBar";
 import { PreviewTable } from "@/components/PreviewTable";
@@ -25,28 +21,22 @@ const BATCH_SIZES = [3, 5, 10, 25];
 const QC_CONCURRENCY = 4;
 
 export default function Home() {
-  // Step 1/2 — PDF + prompt
-  const [extraction, setExtraction] = useState<PdfExtraction | null>(null);
-  const [pdfFileName, setPdfFileName] = useState<string | null>(null);
+  // Step 1 — manual campaign setup (prompt + data facts, entered by the user)
   const [prompt, setPrompt] = useState("");
-  const [dataFactsRows, setDataFactsRows] = useState<DataFactRow[]>([]);
+  const [dataFacts, setDataFacts] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
-  // Step 3 — CSV
+  // Step 2 — CSV
   const [csv, setCsv] = useState<CsvValidationResult | null>(null);
-
-  // Remount keys for the upload widgets so "Re-upload" returns them to a clean
-  // initial state.
-  const [pdfKey, setPdfKey] = useState(0);
   const [csvKey, setCsvKey] = useState(0);
 
-  // Step 4/5 — generation
+  // Step 3 — generation
   const [batchSize, setBatchSize] = useState(5);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState({ done: 0, total: 0 });
   const [emails, setEmails] = useState<GeneratedEmail[]>([]);
 
-  // Step 6/7 — quality + export
+  // Step 4 — quality + export
   const [qcRunning, setQcRunning] = useState(false);
   const [qcProgress, setQcProgress] = useState({ done: 0, total: 0 });
   const [qualityRun, setQualityRun] = useState(false);
@@ -62,28 +52,20 @@ export default function Home() {
     ? summarise(emails.map((e) => e.quality))
     : null;
 
-  // Plain-text summary passed to the quality-check engine (its interface is
-  // unchanged — it still receives a string).
-  const dataFactsSerialized = useMemo(
-    () => serializeDataFacts(dataFactsRows),
-    [dataFactsRows]
-  );
-
-  // Derived (not stored) — the full token/cost summary for the session.
   const tokenSummary = useMemo(() => computeSessionSummary(tokenRecords), [tokenRecords]);
 
-  function handleExtracted(
-    e: PdfExtraction,
-    fileName: string,
-    tokenRecord?: OperationTokenRecord
-  ) {
-    setExtraction(e);
-    setPdfFileName(fileName);
-    setPrompt(e.generation_prompt);
-    setDataFactsRows(parseDataFactsToRows(e.data_facts_summary));
-    setConfirmed(false);
-    if (tokenRecord) setTokenRecords((prev) => [...prev, tokenRecord]);
-  }
+  const setupReady = prompt.trim().length > 0 && dataFacts.trim().length > 0;
+
+  // Current wizard stage for the step indicator.
+  const currentStep = !confirmed
+    ? 0
+    : !csv || csv.missingColumns.length > 0 || csv.rows.length === 0
+    ? 1
+    : !generated
+    ? 2
+    : !qualityRun
+    ? 3
+    : 4;
 
   function scrollToStep(id: string) {
     requestAnimationFrame(() =>
@@ -91,28 +73,7 @@ export default function Home() {
     );
   }
 
-  // ---- Change 1: re-upload / reset handlers ----
-  // Re-uploading the PDF resets everything downstream (prompt, data facts, CSV,
-  // emails, quality). Re-uploading the CSV keeps the PDF extraction and resets
-  // only generation + quality.
-  function resetFromPdf() {
-    if (generated && !window.confirm("This will clear all generated emails. Are you sure?")) return;
-    setExtraction(null);
-    setPdfFileName(null);
-    setPrompt("");
-    setDataFactsRows([]);
-    setConfirmed(false);
-    setCsv(null);
-    setEmails([]);
-    setQualityRun(false);
-    setQualityVersion(0);
-    setGenProgress({ done: 0, total: 0 });
-    setTokenRecords([]);
-    setPdfKey((k) => k + 1);
-    setCsvKey((k) => k + 1);
-    scrollToStep("step-1");
-  }
-
+  // Re-uploading the CSV resets only generation + quality (keeps campaign setup).
   function resetFromCsv() {
     if (generated && !window.confirm("This will clear all generated emails. Are you sure?")) return;
     setCsv(null);
@@ -120,13 +81,12 @@ export default function Home() {
     setQualityRun(false);
     setQualityVersion(0);
     setGenProgress({ done: 0, total: 0 });
-    // Keep the PDF-extraction token record; drop generation/quality records.
-    setTokenRecords((prev) => prev.filter((r) => r.operation === "pdf_extraction"));
+    setTokenRecords([]);
     setCsvKey((k) => k + 1);
-    scrollToStep("step-3");
+    scrollToStep("step-2");
   }
 
-  // ---- Step 4/5: batch generation ----
+  // ---- Step 3: batch generation ----
   async function handleGenerate() {
     if (!csv) return;
     const rows = csv.rows;
@@ -135,8 +95,8 @@ export default function Home() {
     setQualityRun(false);
     setQualityVersion(0);
     setGenProgress({ done: 0, total: rows.length });
-    // Fresh run: drop any prior generation/quality token records, keep PDF.
-    setTokenRecords((prev) => prev.filter((r) => r.operation === "pdf_extraction"));
+    // Fresh run: drop any prior generation/quality token records.
+    setTokenRecords([]);
 
     const collected: GeneratedEmail[] = [];
     for (let i = 0; i < rows.length; i += batchSize) {
@@ -172,7 +132,7 @@ export default function Home() {
     setGenerating(false);
   }
 
-  // ---- Step 6: quality check ----
+  // ---- Step 4: quality check ----
   async function handleQualityCheck() {
     setQcRunning(true);
     setQcProgress({ done: 0, total: generatedOk.length });
@@ -192,7 +152,7 @@ export default function Home() {
             const res = await fetch("/api/quality-check", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, dataFactsSummary: dataFactsSerialized }),
+              body: JSON.stringify({ email, dataFactsSummary: dataFacts }),
             });
             const data = await res.json();
             const idx = indexByRow.get(email.rowIndex);
@@ -217,7 +177,7 @@ export default function Home() {
     setQcRunning(false);
   }
 
-  // ---- Step 7: export ----
+  // ---- Export ----
   function handleExport() {
     if (!qualityRun) {
       const ok = window.confirm(
@@ -251,62 +211,74 @@ export default function Home() {
       <header className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Digital PR Outreach — MVP</h1>
         <p className="text-sm text-slate-500">
-          Single-session tool · PDF → personalised pitch emails → quality check → AppScript CSV.
+          Single-session tool · prompt + data facts → personalised pitch emails → quality check → AppScript CSV.
           Nothing is stored; closing the tab clears everything.
         </p>
       </header>
 
+      <StepIndicator current={currentStep} />
+
       <div className="space-y-5">
-        {/* Step 1 + 2 */}
+        {/* Step 1 — Campaign Setup */}
         <Section
           step={1}
           id="step-1"
-          title="Upload research report PDF & review prompt"
-          subtitle="Gemini extracts a generation prompt and a data-facts summary. Both are editable."
+          title="Step 1 — Campaign Setup"
+          subtitle="Paste the generation prompt and the data facts summary. Both are required."
           done={confirmed}
         >
-          {extraction ? (
-            <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <span className="text-sm text-slate-600">
-                ✓ Extracted from <span className="font-medium text-slate-800">{pdfFileName || "PDF"}</span>
-              </span>
-              <button
-                type="button"
-                onClick={resetFromPdf}
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Generation Prompt
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  if (confirmed) setConfirmed(false);
+                }}
                 disabled={generating || qcRunning}
-                className="text-xs font-medium text-brand underline-offset-2 hover:underline disabled:opacity-40"
-              >
-                Change PDF
-              </button>
-            </div>
-          ) : (
-            <PdfUpload key={pdfKey} onExtracted={handleExtracted} disabled={generating || qcRunning} />
-          )}
-          {extraction && (
-            <div className="mt-4 space-y-4">
-              <PromptEditor
-                prompt={prompt}
-                dataFactsRows={dataFactsRows}
-                onPromptChange={setPrompt}
-                onDataFactsRowsChange={setDataFactsRows}
-                disabled={generating || qcRunning}
+                rows={20}
+                className="code-area w-full rounded-lg border border-slate-300 p-3 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
               />
-              <Button
-                variant={confirmed ? "secondary" : "primary"}
-                onClick={() => setConfirmed(true)}
-                disabled={!prompt.trim()}
-              >
-                {confirmed ? "Prompt confirmed ✓" : "Confirm prompt & data facts"}
-              </Button>
             </div>
-          )}
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Data Facts Summary
+              </label>
+              <textarea
+                value={dataFacts}
+                onChange={(e) => {
+                  setDataFacts(e.target.value);
+                  if (confirmed) setConfirmed(false);
+                }}
+                disabled={generating || qcRunning}
+                rows={12}
+                className="code-area w-full rounded-lg border border-slate-300 p-3 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Used verbatim by the quality-check judge (MAIN-01) to verify emails only cite facts you provide here.
+              </p>
+            </div>
+            <Button
+              variant={confirmed ? "secondary" : "primary"}
+              onClick={() => {
+                setConfirmed(true);
+                scrollToStep("step-2");
+              }}
+              disabled={!setupReady || generating || qcRunning}
+            >
+              {confirmed ? "Confirmed ✓" : "Confirm & Continue"}
+            </Button>
+          </div>
         </Section>
 
-        {/* Step 3 */}
+        {/* Step 2 — CSV */}
         <Section
-          step={3}
-          id="step-3"
-          title="Upload journalist CSV"
+          step={2}
+          id="step-2"
+          title="Step 2 — Upload journalist CSV"
           subtitle="Up to 200 rows. Required columns are validated; rows missing critical fields are flagged."
           done={!!csv && csv.missingColumns.length === 0}
         >
@@ -325,10 +297,11 @@ export default function Home() {
           )}
         </Section>
 
-        {/* Step 4/5 */}
+        {/* Step 3 — generate */}
         <Section
-          step={4}
-          title="Select batch size & generate"
+          step={3}
+          id="step-3"
+          title="Step 3 — Select batch size & generate"
           subtitle="Default batch size 5 to stay under the Vercel Hobby 10s function timeout."
           done={generated && !generating}
         >
@@ -392,11 +365,12 @@ export default function Home() {
           )}
         </Section>
 
-        {/* Step 5/6/7 — results */}
+        {/* Step 4 — review / quality / export */}
         {generated && (
           <Section
-            step={5}
-            title="Review, quality check & export"
+            step={4}
+            id="step-4"
+            title="Step 4 — Review, quality check & export"
             subtitle="Expand any row to inspect the email. Run the quality check, then download the CSV."
           >
             <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -453,7 +427,7 @@ export default function Home() {
       </div>
 
       <footer className="mt-10 text-center text-xs text-slate-400">
-        MVP · No auth · No database · Session-only state. Deploy on Vercel (keep batch size 10 on Hobby).
+        MVP · No auth · No database · Session-only state. Deploy on Vercel (keep batch size 5 on Hobby).
       </footer>
 
       <TokenCostPanel summary={tokenSummary} />

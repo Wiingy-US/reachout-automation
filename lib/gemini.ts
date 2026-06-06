@@ -2,7 +2,7 @@
 // The API key is read from the environment and never leaves the server.
 
 import { GenerateContentResponse, GoogleGenerativeAI } from "@google/generative-ai";
-import { JournalistRow, PdfExtraction, TokenUsage } from "./types";
+import { JournalistRow, TokenUsage } from "./types";
 import { LAYER2_CHECKS } from "./rubric";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -59,54 +59,7 @@ export function extractTokenUsage(
 }
 
 // ---------------------------------------------------------------------------
-// 9.1 — PDF extraction
-// ---------------------------------------------------------------------------
-
-const PDF_SYSTEM_INSTRUCTION = `You are a campaign analyst for a Digital PR agency. You will be given a research report PDF. Extract two things and return them as a JSON object with keys "generation_prompt" and "data_facts_summary". Return valid JSON only — no markdown, no preamble.
-
-"generation_prompt": A full SOP-compliant Gemini prompt for journalist email outreach. It MUST include:
-- A role declaration: "You are a Senior Media Relations Strategist".
-- 2 to 5 content angles derived from the PDF, each listing the specific statistics that angle is permitted to use.
-- A personalisation instruction (tailor each email to the journalist's beat, organisation and recent work).
-- Hard constraints, stated explicitly: no em dashes anywhere; maximum 7 bolded elements; use ONLY facts present in this report; every email body must open with "Hi [First Name],"; the subject line must be returned as plain text above the HTML; the follow-up must be at most 50% of the length of Email 1; no markdown artefacts in the HTML.
-- An output format spec describing the required 3-part output per journalist: a verification summary, Email 1 as HTML, and Follow-Up 1 as HTML. Email 1 must contain a "Key Findings" section and a "Potential Angles" section.
-
-"data_facts_summary": A plain-text structured list of EVERY key statistic, percentage, finding and data point in the PDF, written as clear declarative sentences. No HTML, no bullet/markdown characters. Approximately 300-500 words. This is used verbatim as the ground-truth source for quality-checking whether emails hallucinate statistics.`;
-
-export async function extractFromPdf(
-  base64Pdf: string,
-  mimeType = "application/pdf"
-): Promise<{ extraction: PdfExtraction; usage: TokenUsage }> {
-  const model = getModel();
-  const res = await model.generateContent({
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: PDF_SYSTEM_INSTRUCTION },
-          { inlineData: { data: base64Pdf, mimeType } },
-        ],
-      },
-    ],
-    generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
-  });
-  const text = res.response.text();
-  const usage = extractTokenUsage(res.response, PDF_SYSTEM_INSTRUCTION, text);
-  const json = extractJson(text);
-  if (typeof json.generation_prompt !== "string" || typeof json.data_facts_summary !== "string") {
-    throw new Error("PDF extraction returned an unexpected shape");
-  }
-  return {
-    extraction: {
-      generation_prompt: json.generation_prompt,
-      data_facts_summary: json.data_facts_summary,
-    },
-    usage,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// 9.2 — Email generation (per batch)
+// Email generation (per batch)
 // ---------------------------------------------------------------------------
 
 export const JOURNALIST_START = "---JOURNALIST_START---";
