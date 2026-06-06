@@ -92,25 +92,38 @@ FOLLOWUP1_HTML: <full HTML body of the follow-up. Personalised, references the o
 
 Do not output anything outside the delimited blocks. Do not use markdown code fences. Do not use em dashes.`;
 
+function buildDataFactsBlock(dataFactsSummary: string): string {
+  return `--- PERMITTED DATA FACTS ---
+Use ONLY statistics and findings from this list when writing each email. Select only the facts that are relevant to this specific journalist's beat, organisation, and coverage area. Do not use all facts for every journalist — pick the 2-4 that best fit their specific focus. Do not invent, infer, or extrapolate any figures beyond what is listed here.
+
+${dataFactsSummary.trim()}
+--- END DATA FACTS ---`;
+}
+
 export function buildGenerationPrompt(
   basePrompt: string,
-  rows: JournalistRow[]
+  rows: JournalistRow[],
+  dataFactsSummary = ""
 ): string {
-  return `${basePrompt}
+  const dataFactsBlock = dataFactsSummary.trim()
+    ? `${buildDataFactsBlock(dataFactsSummary)}\n\n`
+    : "";
+  return `${basePrompt.trim()}
 
 ${GENERATION_OUTPUT_SPEC}
 
-JOURNALIST PROFILES (generate one block per journalist below):
+${dataFactsBlock}JOURNALIST PROFILES (generate one block per journalist below):
 
 ${buildProfilesBlock(rows)}`;
 }
 
 export async function generateBatch(
   basePrompt: string,
-  rows: JournalistRow[]
+  rows: JournalistRow[],
+  dataFactsSummary = ""
 ): Promise<{ raw: string; usage: TokenUsage }> {
   const model = getModel();
-  const promptText = buildGenerationPrompt(basePrompt, rows);
+  const promptText = buildGenerationPrompt(basePrompt, rows, dataFactsSummary);
   const res = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: promptText }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 16384 },

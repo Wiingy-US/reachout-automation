@@ -11,6 +11,7 @@ interface GenerateBody {
   prompt: string;
   rows: JournalistRow[];
   batchIndex?: number;
+  dataFactsSummary?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { prompt, rows, batchIndex } = body;
+  const { prompt, rows, batchIndex, dataFactsSummary } = body;
   if (!prompt || !Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json(
       { error: "prompt and a non-empty rows array are required" },
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { raw, usage } = await generateBatch(prompt, rows);
+    const { raw, usage } = await generateBatch(prompt, rows, dataFactsSummary ?? "");
     // One token record per batch call (real tokens were billed even if the
     // output later fails to parse).
     const tokenRecord = toTokenRecord("email_generation", usage, { batch_index: batchIndex });
