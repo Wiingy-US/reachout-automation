@@ -45,8 +45,16 @@ export default function Home() {
   // Token usage accumulated across the session.
   const [tokenRecords, setTokenRecords] = useState<OperationTokenRecord[]>([]);
 
+  // Retry of failed generation rows.
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryProgress, setRetryProgress] = useState<{ current: number; total: number } | null>(null);
+
   const generated = emails.length > 0;
   const generatedOk = useMemo(() => emails.filter((e) => e.status === "generated"), [emails]);
+  const failedCount = useMemo(
+    () => emails.filter((e) => e.status === "generation_failed").length,
+    [emails]
+  );
 
   const summary: QualitySummary | null = qualityRun
     ? summarise(emails.map((e) => e.quality))
@@ -137,18 +145,85 @@ export default function Home() {
     setGenerating(false);
   }
 
+  // ---- Retry: re-run generation for failed rows only ----
+  async function retryFailedRows() {
+    const failed = emails.filter((e) => e.status === "generation_failed");
+    if (failed.length === 0) return;
+    const failedRows = failed.map((e) => e.journalist);
+
+    setIsRetrying(true);
+    setRetryProgress({ current: 0, total: failedRows.length });
+
+    const retryResults: GeneratedEmail[] = [];
+    for (let i = 0; i < failedRows.length; i += batchSize) {
+      const chunk = failedRows.slice(i, i + batchSize);
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            rows: chunk,
+            batchIndex: i / batchSize,
+            dataFactsSummary: dataFacts,
+          }),
+        });
+        const data = await res.json();
+        const batchEmails: GeneratedEmail[] = data.emails ?? [];
+        retryResults.push(...batchEmails);
+        // Retry tokens are counted into the Email Generation total.
+        const batchRecords: OperationTokenRecord[] = data.batch_token_records ?? [];
+        if (batchRecords.length) setTokenRecords((prev) => [...prev, ...batchRecords]);
+      } catch {
+        chunk.forEach((row) =>
+          retryResults.push({
+            rowIndex: row._rowIndex,
+            journalist: row,
+            status: "generation_failed",
+            error: "Network or timeout error on retry",
+            verification_summary: "",
+            subject: "",
+            email_1_html: "",
+            followup_html: "",
+          })
+        );
+      }
+      setRetryProgress({
+        current: Math.min(i + batchSize, failedRows.length),
+        total: failedRows.length,
+      });
+    }
+
+    // Merge retry results back in — replace failed rows, keep successful ones
+    // untouched. Replacement rows carry no `quality`, so the stale QC result of
+    // a retried row is cleared; passing rows keep theirs.
+    setEmails((prev) =>
+      prev.map((existing) => {
+        if (existing.status !== "generation_failed") return existing;
+        return retryResults.find((r) => r.rowIndex === existing.rowIndex) ?? existing;
+      })
+    );
+
+    // Some rows now have no QC result — mark the quality check incomplete so it
+    // can be re-run (it will only evaluate the rows that lack a result).
+    if (retryResults.length > 0) setQualityRun(false);
+
+    setIsRetrying(false);
+    setRetryProgress(null);
+  }
+
   // ---- Step 4: quality check ----
   async function handleQualityCheck() {
+    // Only evaluate rows that don't already have a result — this preserves
+    // passing rows across a retry and avoids re-spending tokens on them.
+    const targets = generatedOk.filter((e) => !e.quality);
     setQcRunning(true);
-    setQcProgress({ done: 0, total: generatedOk.length });
-    // Clear any prior quality-check token records before this run.
-    setTokenRecords((prev) => prev.filter((r) => r.operation !== "quality_check_layer2"));
+    setQcProgress({ done: 0, total: targets.length });
 
     const updated = [...emails];
     const indexByRow = new Map(updated.map((e, idx) => [e.rowIndex, idx]));
     let done = 0;
 
-    const targets = generatedOk;
     for (let i = 0; i < targets.length; i += QC_CONCURRENCY) {
       const slice = targets.slice(i, i + QC_CONCURRENCY);
       await Promise.all(
@@ -315,7 +390,7 @@ export default function Home() {
             <select
               value={batchSize}
               onChange={(e) => setBatchSize(Number(e.target.value))}
-              disabled={generating || qcRunning}
+              disabled={generating || qcRunning || isRetrying}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
             >
               {BATCH_SIZES.map((s) => (
@@ -332,6 +407,7 @@ export default function Home() {
               disabled={
                 generating ||
                 qcRunning ||
+                isRetrying ||
                 !confirmed ||
                 !csv ||
                 csv.missingColumns.length > 0 ||
@@ -381,7 +457,9 @@ export default function Home() {
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <Button
                 onClick={handleQualityCheck}
-                disabled={qcRunning || generating || qualityRun || generatedOk.length === 0}
+                disabled={
+                  qcRunning || generating || isRetrying || qualityRun || generatedOk.length === 0
+                }
               >
                 {qcRunning ? (
                   <>
@@ -393,7 +471,32 @@ export default function Home() {
                   "Run quality check"
                 )}
               </Button>
-              <Button variant="secondary" onClick={handleExport} disabled={generating || qcRunning}>
+
+              {failedCount > 0 && !isRetrying && (
+                <button
+                  type="button"
+                  onClick={retryFailedRows}
+                  disabled={generating || qcRunning}
+                  className="inline-flex items-center gap-2 rounded-lg border border-amber-600 bg-white px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Retry Failed Rows
+                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700">
+                    {failedCount}
+                  </span>
+                </button>
+              )}
+
+              {isRetrying && retryProgress && (
+                <span className="flex items-center gap-2 text-xs font-medium text-amber-700">
+                  <Spinner /> Retrying failed rows… {retryProgress.current} of {retryProgress.total} processed
+                </span>
+              )}
+
+              <Button
+                variant="secondary"
+                onClick={handleExport}
+                disabled={generating || qcRunning || isRetrying}
+              >
                 Download CSV
               </Button>
               {!qualityRun && !qcRunning && (
