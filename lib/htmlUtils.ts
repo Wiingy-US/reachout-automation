@@ -36,13 +36,6 @@ export function wordCount(html: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
-/** Count <b> and <strong> open tags. */
-export function countBolds(html: string): number {
-  if (!html) return 0;
-  const matches = html.match(/<\s*(b|strong)(\s[^>]*)?>/gi);
-  return matches ? matches.length : 0;
-}
-
 export function hasEmDash(html: string): boolean {
   // em dash U+2014 (and the longer horizontal bar U+2015)
   return /[—―]/.test(html);
