@@ -1,4 +1,4 @@
-// The 19-check quality rubric (spec section 05).
+// The 18-check quality rubric (spec section 05).
 //
 // Layer 1 (deterministic, 12 checks) is evaluated server-side with pure
 // string/regex/HTML parsing — see lib/deterministicChecks.ts.
@@ -136,13 +136,6 @@ export const RUBRIC: RubricCheck[] = [
     layer: 2,
     target: "main",
     question: `Is the introduction (text before the Key Findings section) ${RUBRIC_CONFIG.introMaxSentences} sentences or fewer?`,
-    idealAnswer: "Yes",
-  },
-  {
-    id: "FUP-03",
-    layer: 2,
-    target: "followup",
-    question: "Is every statistic or factual claim in the follow-up attributed to a source / citation?",
     idealAnswer: "Yes",
   },
   {
