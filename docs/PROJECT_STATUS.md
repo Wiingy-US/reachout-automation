@@ -10,7 +10,7 @@ history.
 ## 1. What this product is
 
 A **single-session, stateless web tool** that turns a campaign research-report PDF
-into up to 200 personalised journalist pitch emails, runs an 18-check quality
+into up to 200 personalised journalist pitch emails, runs a 29-check quality
 rubric over them, and exports an AppScript-ready CSV.
 
 Core loop: **PDF in → generation prompt + data-facts summary out → personalised
@@ -53,7 +53,7 @@ app/
 components/                    # PdfUpload, PromptEditor, CsvUpload, PreviewTable, SummaryBar, ui
 lib/
   gemini.ts                   # Gemini client + the 3 prompt designs
-  rubric.ts                   # the 18 checks + tunable thresholds (RUBRIC_CONFIG)
+  rubric.ts                   # the 29 checks + tunable thresholds (RUBRIC_CONFIG)
   deterministicChecks.ts      # Layer 1 engine (no AI)
   quality.ts                  # verdict assembly + summary
   parse.ts                    # parses Gemini's delimited generation output
