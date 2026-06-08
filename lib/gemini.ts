@@ -166,7 +166,7 @@ export interface JudgeOutput {
 }
 
 export function buildJudgePrompt(input: JudgeInput): string {
-  return `You are a strict quality auditor for journalist pitch emails. Evaluate the provided email against the rubric below. Return ONLY a valid JSON object matching the schema exactly. No commentary. No markdown. Every check_id in the rubric MUST appear in the output, with no extras and no omissions.
+  return `You are a strict quality auditor for journalist pitch emails. Evaluate the provided email against the rubric below. Return ONLY a valid JSON object matching the schema exactly. No commentary. No markdown. Every check_id listed in the rubric MUST appear in the output — ${LAYER2_CHECKS.length} checks total — with no extras and no omissions.
 
 PERMITTED DATA FACTS: These are the only statistics and findings the email is allowed to reference.
 """

@@ -1,7 +1,7 @@
 # Digital PR Outreach — MVP
 
 Single-session, stateless web tool that turns a generation prompt + data facts
-summary into up to 200 personalised journalist pitch emails, runs an 18-check
+summary into up to 200 personalised journalist pitch emails, runs a 29-check
 quality rubric over them, and exports an AppScript-ready CSV. No login, no
 database — when you close the tab, everything is gone.
 
@@ -64,7 +64,7 @@ components/                  # StepIndicator, CsvUpload, PreviewTable, TokenCost
 lib/
   gemini.ts                 # Gemini client + generation/judge prompts
   parse.ts                  # delimited batch-output parser
-  rubric.ts                 # the 18 checks + tunable thresholds
+  rubric.ts                 # the 29 checks + tunable thresholds
   deterministicChecks.ts    # Layer 1 engine (no AI)
   quality.ts                # verdict assembly + summary
   csv.ts / exportCsv.ts     # CSV parse/validate + export
