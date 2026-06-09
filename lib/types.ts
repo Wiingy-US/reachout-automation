@@ -95,3 +95,49 @@ export interface SessionTokenSummary {
     quality_check: TokenUsage & CostEstimate;
   };
 }
+
+// ---- Run history persistence (Vercel KV) ----
+
+export interface RunRecord {
+  id: string; // UUID, generated at run time
+  created_at: string; // ISO timestamp
+  user_name: string; // entered by user at session start
+  campaign_name: string; // selected or created by user
+
+  // Generation stats
+  generation: {
+    total_journalists: number; // total in CSV
+    batch_size: number; // batch size used
+    total_batches: number; // how many batches ran
+    succeeded: number; // generated successfully
+    failed: number; // generation_failed rows
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cost_usd: number;
+  };
+
+  // Evaluation stats
+  evaluation: {
+    total_evaluated: number; // rows that went through QC
+    passed: number;
+    failed: number;
+    pass_rate: number; // 0-100
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cost_usd: number;
+  };
+
+  // Combined totals
+  totals: {
+    total_tokens: number;
+    total_cost_usd: number;
+  };
+}
+
+export interface CampaignRecord {
+  id: string; // UUID
+  name: string; // display name
+  created_at: string; // ISO timestamp
+}
