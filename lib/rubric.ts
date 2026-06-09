@@ -119,6 +119,14 @@ export const RUBRIC: RubricCheck[] = [
       "Does the email contain forbidden HTML tags (<html>, <head>, <body>, <style>, <title>, <meta>, <!DOCTYPE>)?",
     idealAnswer: "No",
   },
+  {
+    id: "MAIN-34",
+    layer: 1,
+    target: "main",
+    question:
+      "Does each Potential Angles bullet have a 3-4 word headline followed by a one-line description?",
+    idealAnswer: "Yes",
+  },
 
   // Follow-up
   {
@@ -222,15 +230,6 @@ export const RUBRIC: RubricCheck[] = [
       "Does the intro consist of exactly two paragraphs before Key Findings (hook paragraph + Wiingy/study paragraph)?",
     idealAnswer: "Yes",
   },
-  {
-    id: "MAIN-34",
-    layer: 2,
-    target: "main",
-    question:
-      "Does each Potential Angles bullet have a 3-4 word headline followed by a one-line description?",
-    idealAnswer: "Yes",
-  },
-
   // Follow-up
   {
     id: "FUP-06",
