@@ -37,16 +37,27 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const bio = email.journalist.about_bio || "";
     const { output: judge, usage } = await runJudge({
       dataFactsSummary: dataFactsSummary || "",
       firstName: email.journalist.first_name,
       lastName: email.journalist.last_name,
       organisation: email.journalist.organisation,
+      bio,
       subject: email.subject,
       email1Html: email.email_1_html,
       followupHtml: email.followup_html,
     });
-    const layer2: CheckResult[] = normaliseJudgeChecks(judge.checks);
+    let layer2: CheckResult[] = normaliseJudgeChecks(judge.checks);
+    // MAIN-31 can only be judged against a bio — if none was supplied, skip it
+    // rather than penalise the email.
+    if (!bio.trim()) {
+      layer2 = layer2.map((c) =>
+        c.check_id === "MAIN-31"
+          ? { ...c, pass: true, model_answer: "Skipped — no bio available" }
+          : c
+      );
+    }
     const token_record = toTokenRecord("quality_check_layer2", usage, {
       journalist_email: email.journalist.email,
     });

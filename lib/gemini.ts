@@ -149,6 +149,7 @@ export interface JudgeInput {
   firstName: string;
   lastName: string;
   organisation: string;
+  bio: string;
   subject: string;
   email1Html: string;
   followupHtml: string;
@@ -173,10 +174,13 @@ PERMITTED DATA FACTS: These are the only statistics and findings the email is al
 ${input.dataFactsSummary}
 """
 
-JOURNALIST CONTEXT:
-First name: ${input.firstName}
-Last name: ${input.lastName}
+JOURNALIST PROFILE (ground truth for personalisation check):
+First Name: ${input.firstName}
+Last Name: ${input.lastName}
 Organisation: ${input.organisation}
+Bio: ${input.bio?.trim() ? input.bio.trim() : "(none provided)"}
+
+The bio above is the ONLY source of truth for MAIN-31. When evaluating MAIN-31, check whether every specific claim in the opening hook (specific publications, events, projects, motivations, career moves) can be traced to a fact explicitly stated in the bio above. Pass = every hook claim is traceable to the bio, OR the hook only references their beat/outlet without specific claims. Fail = the hook contains specific details (motivations, named works, career history) that are NOT present in the bio above.
 
 EMAIL UNDER REVIEW:
 SUBJECT: ${input.subject}

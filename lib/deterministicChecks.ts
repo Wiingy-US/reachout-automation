@@ -7,6 +7,38 @@ import { decodeEntities, hasEmDash, mentionsPdf, stripHtml, wordCount } from "./
 
 const FORBIDDEN_TAGS = ["<!doctype", "<html", "<head", "<body", "<style", "<title", "<meta"];
 
+// Abbreviations that are acceptable in a subject line and must NOT be flagged
+// as ALL CAPS "shouting" by SUB-03.
+const ABBREVIATION_WHITELIST = new Set([
+  "LA", "NYC", "NY", "SF", "DC", "US", "UK", "TX", "FL", "CA",
+  "NJ", "CT", "MA", "PA", "OH", "IL", "GA", "NC", "TN", "CO",
+  "WA", "OR", "MN", "MO", "AZ", "NV", "MI", "VA", "MD", "PR",
+  "TV", "AI", "CEO", "CFO", "CMO", "CTO", "PhD", "USA",
+  "AM", "PM", "EST", "PST", "CST", "MST",
+]);
+
+function hasAllCapsWords(text: string): { found: boolean; word?: string } {
+  const matches = text.match(/\b[A-Z]{2,}\b/g);
+  if (!matches) return { found: false };
+  const flagged = matches.filter((w) => !ABBREVIATION_WHITELIST.has(w));
+  if (flagged.length === 0) return { found: false };
+  return { found: true, word: flagged[0] };
+}
+
+/** Extract each Potential Angles <li>'s text content (inner HTML stripped).
+ *  Returns null if the section label is not present. */
+function potentialAnglesBullets(html: string): string[] | null {
+  const lower = html.toLowerCase();
+  const start = lower.indexOf("potential angles");
+  if (start === -1) return null;
+  const after = html.slice(start);
+  const endUl = after.toLowerCase().indexOf("</ul>");
+  const seg = endUl === -1 ? after : after.slice(0, endUl);
+  const lis = seg.match(/<li\b[^>]*>[\s\S]*?<\/li>/gi);
+  if (!lis) return [];
+  return lis.map((li) => stripHtml(li).trim());
+}
+
 function result(
   check_id: string,
   question: string,
@@ -64,11 +96,16 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     out.push(result("SUB-02", q("SUB-02"), pass, pass ? `Yes — ${len} chars` : `No — ${len} chars`));
   }
 
-  // SUB-03 — ALL CAPS words (2+ uppercase letters)
+  // SUB-03 — ALL CAPS words (2+ uppercase letters), ignoring known abbreviations
   {
-    const m = subject.match(/\b[A-Z]{2,}\b/);
+    const { found, word } = hasAllCapsWords(subject);
     out.push(
-      result("SUB-03", q("SUB-03"), !m, m ? `Yes — ALL CAPS word found: ${m[0]}` : "No")
+      result(
+        "SUB-03",
+        q("SUB-03"),
+        !found,
+        found ? `Yes — ALL CAPS word found: "${word}"` : "No ALL CAPS words found"
+      )
     );
   }
 
@@ -155,6 +192,43 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     const lower = main.toLowerCase();
     const found = FORBIDDEN_TAGS.find((t) => lower.includes(t));
     out.push(result("MAIN-26", q("MAIN-26"), !found, found ? `Yes — found: ${found}` : "No"));
+  }
+
+  // MAIN-34 — each Potential Angles bullet: 2-5 word headline + colon + description
+  {
+    const bullets = potentialAnglesBullets(main);
+    let pass = true;
+    let answer = "";
+    if (bullets === null || bullets.length === 0) {
+      pass = false;
+      answer = "No — Potential Angles section not found";
+    } else {
+      for (let i = 0; i < bullets.length; i++) {
+        const text = bullets[i];
+        const ci = text.indexOf(":");
+        if (ci === -1) {
+          pass = false;
+          answer = `No — bullet ${i + 1} missing colon separator: '${text}'`;
+          break;
+        }
+        const headline = text.slice(0, ci).trim();
+        const desc = text.slice(ci + 1).trim();
+        const hw = headline ? headline.split(/\s+/).length : 0;
+        if (hw < 2 || hw > 5) {
+          pass = false;
+          answer = `No — bullet ${i + 1} headline is ${hw} words: '${headline}'`;
+          break;
+        }
+        const dw = desc ? desc.split(/\s+/).length : 0;
+        if (dw === 0 || dw >= 35) {
+          pass = false;
+          answer = `No — bullet ${i + 1} description is ${dw} words`;
+          break;
+        }
+      }
+      if (pass) answer = `Yes — all ${bullets.length} bullets correctly formatted`;
+    }
+    out.push(result("MAIN-34", q("MAIN-34"), pass, answer));
   }
 
   // ---- Follow-up ----
