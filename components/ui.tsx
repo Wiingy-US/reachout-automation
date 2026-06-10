@@ -18,21 +18,24 @@ export function Section({
   id?: string;
 }) {
   return (
-    <section id={id} className="scroll-mt-4 rounded-xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+    <section
+      id={id}
+      className="scroll-mt-4 rounded-xl border border-wiingy-gray-border bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+    >
+      <header className="flex items-center gap-3 border-b border-wiingy-gray-border px-6 py-4">
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-            done ? "bg-emerald-100 text-emerald-700" : "bg-brand/10 text-brand"
+            done ? "bg-wiingy-green-light text-wiingy-green" : "bg-wiingy-blue text-white"
           }`}
         >
           {done ? "✓" : step}
         </span>
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+          <h2 className="text-[15px] font-semibold text-wiingy-dark">{title}</h2>
+          {subtitle && <p className="text-xs text-wiingy-gray">{subtitle}</p>}
         </div>
       </header>
-      <div className="px-5 py-4">{children}</div>
+      <div className="px-6 py-5">{children}</div>
     </section>
   );
 }
@@ -53,10 +56,10 @@ export function Button({
   className?: string;
 }) {
   const styles = {
-    primary: "bg-brand text-white hover:bg-brand-dark disabled:bg-slate-300",
+    primary: "bg-wiingy-blue text-white hover:bg-wiingy-blue-dark disabled:bg-[#A5ADDB]",
     secondary:
-      "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50",
-    ghost: "text-slate-600 hover:bg-slate-100 disabled:opacity-50",
+      "border border-wiingy-blue bg-white text-wiingy-blue hover:bg-wiingy-blue-light disabled:opacity-50",
+    ghost: "text-wiingy-gray hover:bg-wiingy-gray-light disabled:opacity-50",
   }[variant];
   return (
     <button
@@ -78,10 +81,10 @@ export function Badge({
   children: ReactNode;
 }) {
   const styles = {
-    pass: "bg-emerald-100 text-emerald-700",
-    fail: "bg-red-100 text-red-700",
-    neutral: "bg-slate-100 text-slate-600",
-    warn: "bg-amber-100 text-amber-700",
+    pass: "bg-wiingy-green-light text-[#15803D]",
+    fail: "bg-wiingy-red-light text-[#DC2626]",
+    neutral: "bg-wiingy-gray-light text-[#9CA3AF]",
+    warn: "bg-wiingy-amber-light text-[#B45309]",
   }[tone];
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${styles}`}>
