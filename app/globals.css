@@ -2,20 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-}
-
-body {
-  @apply antialiased;
-  background-color: #f5f6fa;
-  color: #1a1a2e;
-  font-family: "Inter", system-ui, sans-serif;
-}
-
 /* Render extracted/edited HTML inside textareas with monospace for clarity */
 .code-area {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
   line-height: 1.4;
+}
+
+/* Thin scrollbar for the content area */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #2e3151;
 }

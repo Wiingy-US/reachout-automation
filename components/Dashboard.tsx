@@ -56,7 +56,7 @@ const COLUMNS: { key: SortKey; label: string; hideMobile: boolean }[] = [
 
 function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="flex-1 rounded-xl border border-wiingy-gray-border bg-white px-6 py-5">
+    <div className="flex-1 rounded-xl border border-wiingy-gray-border bg-light-surface dark:bg-dark-surface px-6 py-5">
       <div className="text-[11px] font-medium uppercase tracking-wide text-wiingy-gray">{label}</div>
       <div className={`mt-1 text-[28px] font-bold ${accent ? "text-wiingy-blue" : "text-wiingy-dark"}`}>
         {value}
@@ -173,25 +173,25 @@ export function Dashboard() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3">
-        <label className="text-xs text-slate-500">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface p-3">
+        <label className="text-xs text-light-text2 dark:text-dark-text2">
           Campaign
           <select
             value={campaignFilter}
             onChange={(e) => setCampaignFilter(e.target.value)}
-            className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+            className="mt-1 block rounded-lg border border-light-border bg-light-surface text-light-text px-2 py-1.5 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text"
           >
             {campaignOptions.map((c) => (
               <option key={c} value={c}>{c === "All" ? "All Campaigns" : c}</option>
             ))}
           </select>
         </label>
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-light-text2 dark:text-dark-text2">
           User
           <select
             value={userFilter}
             onChange={(e) => setUserFilter(e.target.value)}
-            className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+            className="mt-1 block rounded-lg border border-light-border bg-light-surface text-light-text px-2 py-1.5 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text"
           >
             {userOptions.map((u) => (
               <option key={u} value={u}>{u === "All" ? "All Users" : u}</option>
@@ -209,38 +209,38 @@ export function Dashboard() {
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-10 animate-pulse rounded bg-slate-100" />
+            <div key={i} className="h-10 animate-pulse rounded bg-light-bg dark:bg-dark-surface2" />
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-          <div className="font-semibold text-red-700">Could not load run history.</div>
-          <p className="mt-1 text-sm text-red-600">Check that Upstash Redis is connected in Vercel → Storage.</p>
+        <div className="rounded-lg border border-danger/30 bg-danger-light dark:bg-danger/10 p-6 text-center">
+          <div className="font-semibold text-danger-text">Could not load run history.</div>
+          <p className="mt-1 text-sm text-danger-text">Check that Upstash Redis is connected in Vercel → Storage.</p>
         </div>
       ) : runs.length === 0 ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-10 text-center">
+        <div className="rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface p-10 text-center">
           <div className="text-4xl">🗂️</div>
-          <div className="mt-2 font-semibold text-slate-700">No runs yet</div>
-          <p className="mt-1 text-sm text-slate-500">Complete a generation run to see history here.</p>
+          <div className="mt-2 font-semibold text-light-text dark:text-dark-text2">No runs yet</div>
+          <p className="mt-1 text-sm text-light-text2 dark:text-dark-text2">Complete a generation run to see history here.</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-10 text-center">
-          <div className="font-semibold text-slate-700">No runs match the current filters.</div>
+        <div className="rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface p-10 text-center">
+          <div className="font-semibold text-light-text dark:text-dark-text2">No runs match the current filters.</div>
           <button type="button" onClick={clearFilters} className="mt-2 text-sm font-medium text-brand hover:underline">
             Clear filters
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-light-bg dark:bg-dark-surface2 text-xs uppercase tracking-wide text-light-text2 dark:text-dark-text2">
                 <tr>
                   {COLUMNS.map((col) => (
                     <th
                       key={col.key}
                       onClick={() => toggleSort(col.key)}
-                      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2 hover:text-slate-700 ${
+                      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2 hover:text-light-text dark:text-dark-text2 ${
                         col.hideMobile ? "hidden md:table-cell" : ""
                       }`}
                     >
@@ -250,38 +250,38 @@ export function Dashboard() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-light-border dark:divide-dark-border">
                 {filtered.map((r) => {
                   const evaluated = r.evaluation.total_evaluated;
                   return (
-                    <tr key={r.id} className="hover:bg-slate-50">
-                      <td className="whitespace-nowrap px-3 py-2 text-slate-600">{fmtDateTime(r.created_at)}</td>
-                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.user_name}</td>
-                      <td className="px-3 py-2 text-slate-800">{r.campaign_name}</td>
-                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.generation.total_journalists}</td>
-                      <td className="hidden whitespace-nowrap px-3 py-2 text-slate-600 md:table-cell">
-                        {r.generation.total_batches}x <span className="text-slate-400">(batch: {r.generation.batch_size})</span>
+                    <tr key={r.id} className="hover:bg-light-surface2 dark:hover:bg-dark-surface2">
+                      <td className="whitespace-nowrap px-3 py-2 text-light-text2 dark:text-dark-text2">{fmtDateTime(r.created_at)}</td>
+                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{r.user_name}</td>
+                      <td className="px-3 py-2 text-light-text dark:text-dark-text">{r.campaign_name}</td>
+                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{r.generation.total_journalists}</td>
+                      <td className="hidden whitespace-nowrap px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">
+                        {r.generation.total_batches}x <span className="text-light-text3 dark:text-dark-text3">(batch: {r.generation.batch_size})</span>
                       </td>
                       <td className="hidden whitespace-nowrap px-3 py-2 md:table-cell">
-                        <span className="text-slate-700">{r.generation.succeeded}</span>
-                        <span className="text-slate-400"> / {r.generation.succeeded + r.generation.failed}</span>
-                        {r.generation.failed > 0 && <span className="text-red-600"> ({r.generation.failed} failed)</span>}
+                        <span className="text-light-text dark:text-dark-text2">{r.generation.succeeded}</span>
+                        <span className="text-light-text3 dark:text-dark-text3"> / {r.generation.succeeded + r.generation.failed}</span>
+                        {r.generation.failed > 0 && <span className="text-danger"> ({r.generation.failed} failed)</span>}
                       </td>
-                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{evaluated}</td>
+                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{evaluated}</td>
                       <td className="px-3 py-2">
                         {evaluated === 0 ? (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-light-text3 dark:text-dark-text3">—</span>
                         ) : (
                           <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${passRateBadgeClass(r.evaluation.pass_rate)}`}>
                             {r.evaluation.pass_rate}%
                           </span>
                         )}
                       </td>
-                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatTokens(r.generation.total_tokens)}</td>
-                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatCostTable(r.generation.cost_usd)}</td>
-                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatTokens(r.evaluation.total_tokens)}</td>
-                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatCostTable(r.evaluation.cost_usd)}</td>
-                      <td className="px-3 py-2 font-bold text-slate-900">{formatCostTable(r.totals.total_cost_usd)}</td>
+                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{formatTokens(r.generation.total_tokens)}</td>
+                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{formatCostTable(r.generation.cost_usd)}</td>
+                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{formatTokens(r.evaluation.total_tokens)}</td>
+                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{formatCostTable(r.evaluation.cost_usd)}</td>
+                      <td className="px-3 py-2 font-bold text-light-text dark:text-dark-text">{formatCostTable(r.totals.total_cost_usd)}</td>
                     </tr>
                   );
                 })}
