@@ -367,10 +367,10 @@ export default function Home() {
     <button
       type="button"
       onClick={() => setActiveTab(tab)}
-      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+      className={`-mb-px border-b-2 px-5 py-3 text-sm transition ${
         activeTab === tab
-          ? "border-brand text-brand"
-          : "border-transparent text-slate-500 hover:text-slate-700"
+          ? "border-brand font-semibold text-brand"
+          : "border-transparent font-medium text-wiingy-gray hover:text-wiingy-dark"
       }`}
     >
       {label}
@@ -378,19 +378,24 @@ export default function Home() {
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
-      <header className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">Digital PR Outreach — MVP</h1>
-        <p className="text-sm text-slate-500">
-          Single-session tool · prompt + data facts → personalised pitch emails → quality check → AppScript CSV.
-        </p>
+    <>
+      {/* Brand header */}
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-wiingy-gray-border bg-white px-6 py-3.5">
+        <div className="flex items-center gap-3">
+          <span className="text-xl font-bold text-wiingy-blue">Wiingy</span>
+          <span className="h-5 w-px bg-wiingy-gray-border" />
+          <span className="text-xl font-semibold text-wiingy-dark">Reachout</span>
+        </div>
+        <span className="text-[13px] font-normal text-wiingy-gray">Digital PR Outreach Tool</span>
       </header>
 
-      <div className="mb-6 flex gap-2 border-b border-slate-200">
+      {/* Tab bar */}
+      <div className="sticky top-[57px] z-40 flex gap-2 border-b border-wiingy-gray-border bg-white px-6">
         {tabBtn("generate", "⚡ Generate")}
         {tabBtn("dashboard", "📊 Dashboard")}
       </div>
 
+      <main className="mx-auto max-w-6xl px-4 py-8">
       {activeTab === "dashboard" ? (
         <Dashboard />
       ) : (
@@ -564,9 +569,9 @@ export default function Home() {
                 </span>
                 <span>{genPct}%</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-wiingy-gray-border">
                 <div
-                  className="h-full rounded-full bg-brand transition-all"
+                  className="h-full rounded-full bg-gradient-to-r from-wiingy-blue to-wiingy-blue-mid transition-all"
                   style={{ width: `${genPct}%` }}
                 />
               </div>
@@ -673,6 +678,7 @@ export default function Home() {
       <TokenCostPanel summary={tokenSummary} />
         </>
       )}
-    </main>
+      </main>
+    </>
   );
 }

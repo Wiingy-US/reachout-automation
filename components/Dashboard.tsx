@@ -12,9 +12,9 @@ function fmtDateTime(iso: string): string {
 }
 
 function passRateBadgeClass(p: number): string {
-  if (p >= 70) return "text-green-700 bg-green-50";
-  if (p >= 50) return "text-amber-700 bg-amber-50";
-  return "text-red-700 bg-red-50";
+  if (p >= 70) return "text-[#15803D] bg-wiingy-green-light";
+  if (p >= 50) return "text-[#B45309] bg-wiingy-amber-light";
+  return "text-[#DC2626] bg-wiingy-red-light";
 }
 
 type SortKey =
@@ -54,11 +54,13 @@ const COLUMNS: { key: SortKey; label: string; hideMobile: boolean }[] = [
   { key: "total_cost", label: "Total Cost", hideMobile: false },
 ];
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-slate-900">{value}</div>
+    <div className="flex-1 rounded-xl border border-wiingy-gray-border bg-white px-6 py-5">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-wiingy-gray">{label}</div>
+      <div className={`mt-1 text-[28px] font-bold ${accent ? "text-wiingy-blue" : "text-wiingy-dark"}`}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -167,7 +169,7 @@ export function Dashboard() {
         <StatCard label="Total Runs" value={String(summary.n)} />
         <StatCard label="Journalists Processed" value={String(summary.journalists)} />
         <StatCard label="Avg Pass Rate" value={`${summary.avgPass}%`} />
-        <StatCard label="Total Spend" value={formatCostTable(summary.spend)} />
+        <StatCard label="Total Spend" value={formatCostTable(summary.spend)} accent />
       </div>
 
       {/* Filters */}

@@ -7,7 +7,10 @@
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply antialiased;
+  background-color: #f5f6fa;
+  color: #1a1a2e;
+  font-family: "Inter", system-ui, sans-serif;
 }
 
 /* Render extracted/edited HTML inside textareas with monospace for clarity */

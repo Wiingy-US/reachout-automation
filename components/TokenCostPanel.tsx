@@ -55,7 +55,7 @@ export function TokenCostPanel({ summary }: { summary: SessionTokenSummary }) {
                 <td className="py-1 px-2 text-right tabular-nums text-slate-800">
                   {formatTokens(totals.output_tokens)}
                 </td>
-                <td className="py-1 pl-2 text-right tabular-nums text-slate-800">
+                <td className="py-1 pl-2 text-right font-bold tabular-nums text-wiingy-blue">
                   ~{formatCost(totals.total_cost_usd)}
                 </td>
               </tr>
@@ -78,10 +78,12 @@ export function TokenCostPanel({ summary }: { summary: SessionTokenSummary }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-slate-800"
+        className="flex items-center gap-2 rounded-full bg-wiingy-dark px-3.5 py-1.5 text-[13px] font-medium text-white shadow-lg hover:opacity-90"
         title="Token usage & estimated cost (click to toggle)"
       >
-        <span>⚡ {formatTokens(totals.total_tokens)} tokens</span>
+        <span>
+          <span className="text-wiingy-blue-mid">⚡</span> {formatTokens(totals.total_tokens)} tokens
+        </span>
         <span className="text-slate-300">~{formatCost(totals.total_cost_usd)} total</span>
         <span className={`transition ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
