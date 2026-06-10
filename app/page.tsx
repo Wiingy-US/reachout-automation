@@ -18,6 +18,7 @@ import { SummaryBar } from "@/components/SummaryBar";
 import { PreviewTable } from "@/components/PreviewTable";
 import { TokenCostPanel } from "@/components/TokenCostPanel";
 import { CampaignPicker } from "@/components/CampaignPicker";
+import { UserPicker } from "@/components/UserPicker";
 import { Dashboard } from "@/components/Dashboard";
 
 const USER_NAME_KEY = "reachout_user_name";
@@ -366,10 +367,10 @@ export default function Home() {
     <button
       type="button"
       onClick={() => setActiveTab(tab)}
-      className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
         activeTab === tab
-          ? "bg-brand text-white"
-          : "bg-white text-slate-600 hover:bg-slate-100"
+          ? "border-brand text-brand"
+          : "border-transparent text-slate-500 hover:text-slate-700"
       }`}
     >
       {label}
@@ -385,9 +386,9 @@ export default function Home() {
         </p>
       </header>
 
-      <div className="mb-6 flex gap-2 border-b border-slate-200 pb-3">
-        {tabBtn("generate", "Generate")}
-        {tabBtn("dashboard", "Dashboard")}
+      <div className="mb-6 flex gap-2 border-b border-slate-200">
+        {tabBtn("generate", "⚡ Generate")}
+        {tabBtn("dashboard", "📊 Dashboard")}
       </div>
 
       {activeTab === "dashboard" ? (
@@ -409,22 +410,20 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Your Name
+                  You
                 </label>
-                <input
+                <UserPicker
                   value={userName}
-                  onChange={(e) => {
-                    setUserName(e.target.value);
+                  onChange={(name) => {
+                    setUserName(name);
                     try {
-                      localStorage.setItem(USER_NAME_KEY, e.target.value);
+                      localStorage.setItem(USER_NAME_KEY, name);
                     } catch {
                       /* ignore */
                     }
                     if (confirmed) setConfirmed(false);
                   }}
                   disabled={generating || qcRunning}
-                  placeholder="e.g. Rishi"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
                 />
               </div>
               <div>

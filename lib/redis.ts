@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { RunRecord, CampaignRecord } from "./types";
+import { RunRecord, CampaignRecord, UserRecord } from "./types";
 
 // Guard: return null if env vars not set (local dev without credentials).
 function createRedisClient(): Redis | null {
@@ -22,6 +22,7 @@ export const redis = createRedisClient();
 
 const RUNS_INDEX_KEY = "runs:index";
 const CAMPAIGNS_KEY = "campaigns:all";
+const USERS_KEY = "users:all";
 const MAX_RUNS = 500;
 
 // @upstash/redis auto-serialises objects and parses JSON on read, but values
@@ -114,4 +115,37 @@ export async function saveCampaign(name: string): Promise<CampaignRecord> {
     console.error("Redis saveCampaign error:", err);
   }
   return campaign;
+}
+
+// ── Users ───────────────────────────────────────────────────────
+
+export async function getUsers(): Promise<UserRecord[]> {
+  if (!redis) return [];
+  try {
+    return asArray<UserRecord>(await redis.get(USERS_KEY));
+  } catch (err) {
+    console.error("Redis getUsers error:", err);
+    return [];
+  }
+}
+
+export async function saveUser(name: string): Promise<UserRecord> {
+  const { v4: uuidv4 } = await import("uuid");
+  const user: UserRecord = {
+    id: uuidv4(),
+    name: name.trim(),
+    created_at: new Date().toISOString(),
+  };
+  if (!redis) return user;
+  try {
+    const existing = await getUsers();
+    const duplicate = existing.find(
+      (u) => u.name.toLowerCase() === user.name.toLowerCase()
+    );
+    if (duplicate) return duplicate;
+    await redis.set(USERS_KEY, [user, ...existing]);
+  } catch (err) {
+    console.error("Redis saveUser error:", err);
+  }
+  return user;
 }

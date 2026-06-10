@@ -1,28 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RunRecord } from "@/lib/types";
-import { formatCost, formatTokens } from "@/lib/costs";
+import { RunRecord, CampaignRecord, UserRecord } from "@/lib/types";
+import { formatTokens, formatCostTable } from "@/lib/costs";
 
 function fmtDateTime(iso: string): string {
   const d = new Date(iso);
-  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   return `${date} · ${time}`;
 }
 
-function passRateClass(p: number): string {
+function passRateBadgeClass(p: number): string {
   if (p >= 70) return "text-green-700 bg-green-50";
   if (p >= 50) return "text-amber-700 bg-amber-50";
   return "text-red-700 bg-red-50";
 }
-
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-const todayIso = () => new Date().toISOString().slice(0, 10);
 
 type SortKey =
   | "created_at" | "user_name" | "campaign_name" | "journalists" | "batches"
@@ -45,9 +38,8 @@ const ACCESSORS: Record<SortKey, (r: RunRecord) => number | string> = {
   total_cost: (r) => r.totals.total_cost_usd,
 };
 
-// label, sortKey, hide-on-mobile
 const COLUMNS: { key: SortKey; label: string; hideMobile: boolean }[] = [
-  { key: "created_at", label: "Date/Time", hideMobile: false },
+  { key: "created_at", label: "Date", hideMobile: false },
   { key: "user_name", label: "User", hideMobile: true },
   { key: "campaign_name", label: "Campaign", hideMobile: false },
   { key: "journalists", label: "Journalists", hideMobile: true },
@@ -73,25 +65,38 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export function Dashboard() {
   const [runs, setRuns] = useState<RunRecord[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   const [campaignFilter, setCampaignFilter] = useState("All");
   const [userFilter, setUserFilter] = useState("All");
-  const [fromDate, setFromDate] = useState(isoDaysAgo(30));
-  const [toDate, setToDate] = useState(todayIso());
 
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  // Loads on mount; component remounts whenever the Dashboard tab is opened,
+  // so this also refreshes on every tab switch to Dashboard.
   useEffect(() => {
     let active = true;
     (async () => {
+      setLoading(true);
       try {
-        const res = await fetch("/api/runs");
-        if (!res.ok) throw new Error("bad status");
-        const data = await res.json();
-        if (active) setRuns(data.runs ?? []);
+        const [runsRes, campsRes, usersRes] = await Promise.all([
+          fetch("/api/runs"),
+          fetch("/api/campaigns"),
+          fetch("/api/users"),
+        ]);
+        if (!runsRes.ok) throw new Error("bad status");
+        const runsData = await runsRes.json();
+        const campsData = await campsRes.json().catch(() => ({ campaigns: [] }));
+        const usersData = await usersRes.json().catch(() => ({ users: [] }));
+        if (active) {
+          setRuns(runsData.runs ?? []);
+          setCampaigns(campsData.campaigns ?? []);
+          setUsers(usersData.users ?? []);
+        }
       } catch {
         if (active) setError(true);
       } finally {
@@ -103,22 +108,22 @@ export function Dashboard() {
     };
   }, []);
 
-  const campaignOptions = useMemo(
-    () => ["All", ...Array.from(new Set(runs.map((r) => r.campaign_name)))],
-    [runs]
-  );
-  const userOptions = useMemo(
-    () => ["All", ...Array.from(new Set(runs.map((r) => r.user_name)))],
-    [runs]
-  );
+  const campaignOptions = useMemo(() => {
+    const names = new Set(campaigns.map((c) => c.name));
+    runs.forEach((r) => names.add(r.campaign_name));
+    return ["All", ...Array.from(names)];
+  }, [campaigns, runs]);
+
+  const userOptions = useMemo(() => {
+    const names = new Set(users.map((u) => u.name));
+    runs.forEach((r) => names.add(r.user_name));
+    return ["All", ...Array.from(names)];
+  }, [users, runs]);
 
   const filtered = useMemo(() => {
     const out = runs.filter((r) => {
       if (campaignFilter !== "All" && r.campaign_name !== campaignFilter) return false;
       if (userFilter !== "All" && r.user_name !== userFilter) return false;
-      const day = r.created_at.slice(0, 10);
-      if (fromDate && day < fromDate) return false;
-      if (toDate && day > toDate) return false;
       return true;
     });
     const acc = ACCESSORS[sortKey];
@@ -129,17 +134,18 @@ export function Dashboard() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return out;
-  }, [runs, campaignFilter, userFilter, fromDate, toDate, sortKey, sortDir]);
+  }, [runs, campaignFilter, userFilter, sortKey, sortDir]);
 
-  // Summary across ALL runs (not filtered), per spec.
+  // Summary reflects the filtered set (spec section 8).
   const summary = useMemo(() => {
-    const totalRuns = runs.length;
-    const totalJournalists = runs.reduce((s, r) => s + r.generation.total_journalists, 0);
-    const avgPassRate =
-      totalRuns > 0 ? Math.round(runs.reduce((s, r) => s + r.evaluation.pass_rate, 0) / totalRuns) : 0;
-    const totalCost = runs.reduce((s, r) => s + r.totals.total_cost_usd, 0);
-    return { totalRuns, totalJournalists, avgPassRate, totalCost };
-  }, [runs]);
+    const n = filtered.length;
+    const journalists = filtered.reduce((s, r) => s + r.generation.total_journalists, 0);
+    const avgPass = n > 0 ? Math.round(filtered.reduce((s, r) => s + r.evaluation.pass_rate, 0) / n) : 0;
+    const spend = filtered.reduce((s, r) => s + r.totals.total_cost_usd, 0);
+    return { n, journalists, avgPass, spend };
+  }, [filtered]);
+
+  const filtersActive = campaignFilter !== "All" || userFilter !== "All";
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -152,18 +158,16 @@ export function Dashboard() {
   function clearFilters() {
     setCampaignFilter("All");
     setUserFilter("All");
-    setFromDate(isoDaysAgo(30));
-    setToDate(todayIso());
   }
 
   return (
     <div className="space-y-5">
-      {/* Summary */}
+      {/* Summary (reflects filters) */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <StatCard label="Total Runs" value={String(summary.totalRuns)} />
-        <StatCard label="Journalists Processed" value={String(summary.totalJournalists)} />
-        <StatCard label="Avg Pass Rate" value={`${summary.avgPassRate}%`} />
-        <StatCard label="Total Cost" value={formatCost(summary.totalCost)} />
+        <StatCard label="Total Runs" value={String(summary.n)} />
+        <StatCard label="Journalists Processed" value={String(summary.journalists)} />
+        <StatCard label="Avg Pass Rate" value={`${summary.avgPass}%`} />
+        <StatCard label="Total Spend" value={formatCostTable(summary.spend)} />
       </div>
 
       {/* Filters */}
@@ -176,7 +180,7 @@ export function Dashboard() {
             className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
             {campaignOptions.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>{c === "All" ? "All Campaigns" : c}</option>
             ))}
           </select>
         </label>
@@ -188,34 +192,18 @@ export function Dashboard() {
             className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
           >
             {userOptions.map((u) => (
-              <option key={u} value={u}>{u}</option>
+              <option key={u} value={u}>{u === "All" ? "All Users" : u}</option>
             ))}
           </select>
         </label>
-        <label className="text-xs text-slate-500">
-          From
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
-          />
-        </label>
-        <label className="text-xs text-slate-500">
-          To
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
-          />
-        </label>
-        <button type="button" onClick={clearFilters} className="text-xs font-medium text-brand hover:underline">
-          Clear filters
-        </button>
+        {filtersActive && (
+          <button type="button" onClick={clearFilters} className="text-xs font-medium text-brand hover:underline">
+            Clear filters
+          </button>
+        )}
       </div>
 
-      {/* Table / states */}
+      {/* States */}
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -223,16 +211,22 @@ export function Dashboard() {
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
-          Could not load run history. Check that Upstash Redis is connected in Vercel.
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <div className="font-semibold text-red-700">Could not load run history.</div>
+          <p className="mt-1 text-sm text-red-600">Check that Upstash Redis is connected in Vercel → Storage.</p>
         </div>
       ) : runs.length === 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-10 text-center">
-          <div className="text-3xl">🗂️</div>
+          <div className="text-4xl">🗂️</div>
           <div className="mt-2 font-semibold text-slate-700">No runs yet</div>
-          <p className="mt-1 text-sm text-slate-500">
-            Complete a generation and quality check to see your run history here.
-          </p>
+          <p className="mt-1 text-sm text-slate-500">Complete a generation run to see history here.</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-10 text-center">
+          <div className="font-semibold text-slate-700">No runs match the current filters.</div>
+          <button type="button" onClick={clearFilters} className="mt-2 text-sm font-medium text-brand hover:underline">
+            Clear filters
+          </button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -244,7 +238,7 @@ export function Dashboard() {
                     <th
                       key={col.key}
                       onClick={() => toggleSort(col.key)}
-                      className={`cursor-pointer select-none px-3 py-2 whitespace-nowrap hover:text-slate-700 ${
+                      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2 hover:text-slate-700 ${
                         col.hideMobile ? "hidden md:table-cell" : ""
                       }`}
                     >
@@ -255,41 +249,43 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 whitespace-nowrap text-slate-600">{fmtDateTime(r.created_at)}</td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.user_name}</td>
-                    <td className="px-3 py-2 text-slate-800">{r.campaign_name}</td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.generation.total_journalists}</td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell whitespace-nowrap">
-                      {r.generation.total_batches} <span className="text-slate-400">· bs {r.generation.batch_size}</span>
-                    </td>
-                    <td className="hidden px-3 py-2 md:table-cell whitespace-nowrap">
-                      <span className="text-slate-700">{r.generation.succeeded}</span>
-                      <span className="text-slate-400">/{r.generation.succeeded + r.generation.failed}</span>
-                      {r.generation.failed > 0 && (
-                        <span className="text-red-600"> ({r.generation.failed} failed)</span>
-                      )}
-                    </td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.evaluation.total_evaluated}</td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${passRateClass(r.evaluation.pass_rate)}`}>
-                        {r.evaluation.pass_rate}%
-                      </span>
-                    </td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatTokens(r.generation.total_tokens)}</td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatCost(r.generation.cost_usd)}</td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatTokens(r.evaluation.total_tokens)}</td>
-                    <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatCost(r.evaluation.cost_usd)}</td>
-                    <td className="px-3 py-2 font-bold text-slate-900">{formatCost(r.totals.total_cost_usd)}</td>
-                  </tr>
-                ))}
+                {filtered.map((r) => {
+                  const evaluated = r.evaluation.total_evaluated;
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-600">{fmtDateTime(r.created_at)}</td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.user_name}</td>
+                      <td className="px-3 py-2 text-slate-800">{r.campaign_name}</td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.generation.total_journalists}</td>
+                      <td className="hidden whitespace-nowrap px-3 py-2 text-slate-600 md:table-cell">
+                        {r.generation.total_batches}x <span className="text-slate-400">(batch: {r.generation.batch_size})</span>
+                      </td>
+                      <td className="hidden whitespace-nowrap px-3 py-2 md:table-cell">
+                        <span className="text-slate-700">{r.generation.succeeded}</span>
+                        <span className="text-slate-400"> / {r.generation.succeeded + r.generation.failed}</span>
+                        {r.generation.failed > 0 && <span className="text-red-600"> ({r.generation.failed} failed)</span>}
+                      </td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{evaluated}</td>
+                      <td className="px-3 py-2">
+                        {evaluated === 0 ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${passRateBadgeClass(r.evaluation.pass_rate)}`}>
+                            {r.evaluation.pass_rate}%
+                          </span>
+                        )}
+                      </td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatTokens(r.generation.total_tokens)}</td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatCostTable(r.generation.cost_usd)}</td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatTokens(r.evaluation.total_tokens)}</td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{formatCostTable(r.evaluation.cost_usd)}</td>
+                      <td className="px-3 py-2 font-bold text-slate-900">{formatCostTable(r.totals.total_cost_usd)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          {filtered.length === 0 && (
-            <div className="p-6 text-center text-sm text-slate-400">No runs match the current filters.</div>
-          )}
         </div>
       )}
     </div>

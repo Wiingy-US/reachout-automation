@@ -141,3 +141,9 @@ export interface CampaignRecord {
   name: string; // display name
   created_at: string; // ISO timestamp
 }
+
+export interface UserRecord {
+  id: string; // UUID
+  name: string; // display name
+  created_at: string; // ISO timestamp
+}

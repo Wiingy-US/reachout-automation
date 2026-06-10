@@ -35,6 +35,13 @@ export function formatCost(usd: number): string {
   return `$${usd.toFixed(3)}`;
 }
 
+/** Table variant: shows "—" for zero (used in the dashboard runs table). */
+export function formatCostTable(usd: number): string {
+  if (usd === 0) return "—";
+  if (usd < 0.001) return "<$0.001";
+  return `$${usd.toFixed(3)}`;
+}
+
 export function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
