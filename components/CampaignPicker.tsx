@@ -72,7 +72,7 @@ export function CampaignPicker({
 
   if (loading) {
     return (
-      <span className="flex items-center gap-2 text-sm text-slate-500">
+      <span className="flex items-center gap-2 text-sm text-light-text2 dark:text-dark-text2">
         <Spinner /> Loading campaigns…
       </span>
     );
@@ -87,7 +87,7 @@ export function CampaignPicker({
           disabled={disabled || saving}
           autoFocus
           placeholder="New campaign name"
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+          className="flex-1 rounded-lg border border-light-border bg-light-surface text-light-text dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -110,7 +110,7 @@ export function CampaignPicker({
             setNewName("");
           }}
           disabled={saving}
-          className="text-xs text-slate-500 hover:underline"
+          className="text-xs text-light-text2 dark:text-dark-text2 hover:underline"
         >
           Cancel
         </button>
@@ -126,7 +126,7 @@ export function CampaignPicker({
         else onChange(e.target.value);
       }}
       disabled={disabled}
-      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
+      className="w-full rounded-lg border border-light-border bg-light-surface text-light-text dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-light-surface2 dark:disabled:bg-dark-surface"
     >
       <option value="" disabled>
         Select a campaign…

@@ -33,7 +33,7 @@ export function CsvUpload({
   return (
     <div>
       <label
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 px-6 py-6 text-center transition hover:border-brand ${
+        className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-light-border dark:border-dark-border px-6 py-6 text-center transition hover:border-brand ${
           disabled ? "pointer-events-none opacity-60" : ""
         }`}
       >
@@ -47,15 +47,15 @@ export function CsvUpload({
             if (f) handleFile(f);
           }}
         />
-        <span className="text-sm font-medium text-slate-700">
+        <span className="text-sm font-medium text-light-text dark:text-dark-text2">
           {fileName ? `Selected: ${fileName}` : "Click to upload journalist CSV"}
         </span>
-        <span className="mt-1 text-xs text-slate-400">
+        <span className="mt-1 text-xs text-light-text3 dark:text-dark-text3">
           Required columns: {REQUIRED_COLUMNS.join(", ")} · max {MAX_ROWS} rows
         </span>
       </label>
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger-text">{error}</p>}
 
       {result && (
         <div className="mt-3 space-y-2 text-sm">
@@ -77,7 +77,7 @@ export function CsvUpload({
           </div>
 
           {result.invalidRows.length > 0 && (
-            <div className="max-h-32 overflow-auto rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            <div className="max-h-32 overflow-auto rounded-lg border border-warning/30 bg-warning-light dark:bg-warning/10 p-2 text-xs text-warning-text">
               {result.invalidRows.map((r) => (
                 <div key={r.rowIndex}>
                   Row {r.rowIndex + 1}: missing {r.missing.join(", ")}

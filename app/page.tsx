@@ -12,7 +12,6 @@ import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
 import { buildRunRecord } from "@/lib/run-record";
 import { Button, Section, Spinner } from "@/components/ui";
-import { StepIndicator } from "@/components/StepIndicator";
 import { CsvUpload } from "@/components/CsvUpload";
 import { SummaryBar } from "@/components/SummaryBar";
 import { PreviewTable } from "@/components/PreviewTable";
@@ -20,6 +19,10 @@ import { TokenCostPanel } from "@/components/TokenCostPanel";
 import { CampaignPicker } from "@/components/CampaignPicker";
 import { UserPicker } from "@/components/UserPicker";
 import { Dashboard } from "@/components/Dashboard";
+import { Sidebar } from "@/components/Sidebar";
+import { ConfirmModal } from "@/components/ConfirmModal";
+
+const THEME_KEY = "wiingy_theme";
 
 const USER_NAME_KEY = "reachout_user_name";
 
@@ -29,6 +32,27 @@ const QC_CONCURRENCY = 4;
 export default function Home() {
   // Top-level tab
   const [activeTab, setActiveTab] = useState<"generate" | "dashboard">("generate");
+
+  // Dark mode (class on <html>, persisted in localStorage; no-flash script in layout).
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+  }, []);
+  function toggleDark() {
+    setIsDark((prev) => {
+      const next = !prev;
+      document.documentElement.classList.toggle("dark", next);
+      try {
+        localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  // Pending step-back navigation awaiting confirmation.
+  const [pendingStep, setPendingStep] = useState<number | null>(null);
 
   // Session identity
   const [userName, setUserName] = useState("");
@@ -134,10 +158,73 @@ export default function Home() {
     ? 3
     : 4;
 
+  // Sidebar derived state.
+  const completedSteps: boolean[] = [
+    confirmed,
+    !!csv && csv.missingColumns.length === 0 && csv.rows.length > 0,
+    generated,
+    qualityRun,
+    false, // Export has no completion state
+  ];
+
+  const sessionStats = {
+    journalists: csv ? String(csv.rows.length) : "—",
+    generated: generated ? `${generatedOk.length} / ${emails.length}` : "—",
+    passRate: qualityRun && summary ? `${summary.passRate}%` : "—",
+    cost:
+      tokenSummary.totals.total_tokens > 0
+        ? formatCost(tokenSummary.totals.total_cost_usd)
+        : "—",
+  };
+
+  const STEP_NAMES = ["Campaign Setup", "Journalists", "Generate", "Review & QC", "Export"];
+
   function scrollToStep(id: string) {
     requestAnimationFrame(() =>
       document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
     );
+  }
+
+  function stepDomId(index: number): string {
+    // index 0→setup, 1→csv, 2→generate, 3/4→review/export (same card)
+    return `step-${Math.min(index + 1, 4)}`;
+  }
+
+  function executeStepNav(index: number) {
+    if (index === 0) {
+      // Back to Campaign Setup — clear everything downstream.
+      setConfirmed(false);
+      setCsv(null);
+      setEmails([]);
+      setQualityRun(false);
+      setQualityVersion(0);
+      setGenProgress({ done: 0, total: 0 });
+      setTokenRecords([]);
+      setCsvKey((k) => k + 1);
+    } else if (index === 1) {
+      // Back to Journalists — clear generation + QC, keep setup.
+      setEmails([]);
+      setQualityRun(false);
+      setQualityVersion(0);
+      setGenProgress({ done: 0, total: 0 });
+      setTokenRecords([]);
+    }
+    setActiveTab("generate");
+    scrollToStep(stepDomId(index));
+  }
+
+  function handleStepClick(index: number) {
+    setActiveTab("generate");
+    if (index === currentStep) {
+      scrollToStep(stepDomId(index));
+      return;
+    }
+    // Going back to setup/journalists after generation is destructive.
+    if (index < 2 && generated) {
+      setPendingStep(index);
+      return;
+    }
+    executeStepNav(index);
   }
 
   // Re-uploading the CSV resets only generation + quality (keeps campaign setup).
@@ -363,45 +450,24 @@ export default function Home() {
   const qcPct =
     qcProgress.total === 0 ? 0 : Math.round((qcProgress.done / qcProgress.total) * 100);
 
-  const tabBtn = (tab: "generate" | "dashboard", label: string) => (
-    <button
-      type="button"
-      onClick={() => setActiveTab(tab)}
-      className={`-mb-px border-b-2 px-5 py-3 text-sm transition ${
-        activeTab === tab
-          ? "border-brand font-semibold text-brand"
-          : "border-transparent font-medium text-wiingy-gray hover:text-wiingy-dark"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
-    <>
-      {/* Brand header */}
-      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-wiingy-gray-border bg-white px-6 py-3.5">
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-bold text-wiingy-blue">Wiingy</span>
-          <span className="h-5 w-px bg-wiingy-gray-border" />
-          <span className="text-xl font-semibold text-wiingy-dark">Reachout</span>
-        </div>
-        <span className="text-[13px] font-normal text-wiingy-gray">Digital PR Outreach Tool</span>
-      </header>
-
-      {/* Tab bar */}
-      <div className="sticky top-[57px] z-40 flex gap-2 border-b border-wiingy-gray-border bg-white px-6">
-        {tabBtn("generate", "⚡ Generate")}
-        {tabBtn("dashboard", "📊 Dashboard")}
-      </div>
-
-      <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="flex h-screen overflow-hidden bg-light-bg dark:bg-dark-bg">
+      <Sidebar
+        currentStep={currentStep}
+        completedSteps={completedSteps}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onStepClick={handleStepClick}
+        sessionStats={sessionStats}
+        isDark={isDark}
+        onToggleDark={toggleDark}
+      />
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-4xl px-6 py-8">
       {activeTab === "dashboard" ? (
         <Dashboard />
       ) : (
         <>
-      <StepIndicator current={currentStep} />
-
       <div className="space-y-5">
         {/* Step 1 — Campaign Setup */}
         <Section
@@ -414,7 +480,7 @@ export default function Home() {
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">
                   You
                 </label>
                 <UserPicker
@@ -432,7 +498,7 @@ export default function Home() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">
                   Campaign
                 </label>
                 <CampaignPicker
@@ -446,7 +512,7 @@ export default function Home() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">
                 Generation Prompt
               </label>
               <textarea
@@ -457,11 +523,11 @@ export default function Home() {
                 }}
                 disabled={generating || qcRunning}
                 rows={20}
-                className="code-area w-full rounded-lg border border-slate-300 p-3 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
+                className="code-area w-full rounded-lg border border-light-border bg-light-surface text-light-text p-3 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:bg-light-surface2 dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text dark:disabled:bg-dark-surface"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">
                 Data Facts Summary
               </label>
               <textarea
@@ -472,9 +538,9 @@ export default function Home() {
                 }}
                 disabled={generating || qcRunning}
                 rows={12}
-                className="code-area w-full rounded-lg border border-slate-300 p-3 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
+                className="code-area w-full rounded-lg border border-light-border bg-light-surface text-light-text p-3 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:bg-light-surface2 dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text dark:disabled:bg-dark-surface"
               />
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-light-text3 dark:text-dark-text3">
                 Used verbatim by the quality-check judge (MAIN-01) to verify emails only cite facts you provide here.
               </p>
             </div>
@@ -523,12 +589,12 @@ export default function Home() {
           done={generated && !generating}
         >
           <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm text-slate-600">Batch size</label>
+            <label className="text-sm text-light-text2 dark:text-dark-text2">Batch size</label>
             <select
               value={batchSize}
               onChange={(e) => setBatchSize(Number(e.target.value))}
               disabled={generating || qcRunning || isRetrying}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              className="rounded-lg border border-light-border bg-light-surface text-light-text px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text"
             >
               {BATCH_SIZES.map((s) => (
                 <option key={s} value={s}>
@@ -536,7 +602,7 @@ export default function Home() {
                 </option>
               ))}
             </select>
-            <span className="w-full text-xs text-slate-400">
+            <span className="w-full text-xs text-light-text3 dark:text-dark-text3">
               Smaller batches are more reliable. 5 is recommended.
             </span>
             <Button
@@ -563,19 +629,19 @@ export default function Home() {
 
           {(generating || generated) && (
             <div className="mt-4">
-              <div className="mb-1 flex justify-between text-xs text-slate-500">
+              <div className="mb-1 flex justify-between text-xs text-light-text2 dark:text-dark-text2">
                 <span>
                   {genProgress.done} of {genProgress.total} journalists processed
                 </span>
                 <span>{genPct}%</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-wiingy-gray-border">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-light-border dark:bg-dark-border">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-wiingy-blue to-wiingy-blue-mid transition-all"
                   style={{ width: `${genPct}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-light-text3 dark:text-dark-text3">
                 Tokens used this session: {formatTokens(tokenSummary.breakdown.email_generation.total_tokens)}{" "}
                 · Estimated cost so far: ~{formatCost(tokenSummary.breakdown.email_generation.total_cost_usd)}
               </p>
@@ -614,17 +680,17 @@ export default function Home() {
                   type="button"
                   onClick={retryFailedRows}
                   disabled={generating || qcRunning}
-                  className="inline-flex items-center gap-2 rounded-lg border border-amber-600 bg-white px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg border border-warning bg-transparent px-4 py-2 text-sm font-medium text-warning-text transition hover:bg-warning-light dark:hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Retry Failed Rows
-                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700">
+                  <span className="rounded-full bg-warning-light px-1.5 py-0.5 text-xs font-semibold text-warning-text">
                     {failedCount}
                   </span>
                 </button>
               )}
 
               {isRetrying && retryProgress && (
-                <span className="flex items-center gap-2 text-xs font-medium text-amber-700">
+                <span className="flex items-center gap-2 text-xs font-medium text-warning-text">
                   <Spinner /> Retrying failed rows… {retryProgress.current} of {retryProgress.total} processed
                 </span>
               )}
@@ -637,7 +703,7 @@ export default function Home() {
                 Download CSV
               </Button>
               {!qualityRun && !qcRunning && (
-                <span className="text-xs text-amber-600">
+                <span className="text-xs text-warning-text">
                   Tip: run the quality check before export to populate the status columns.
                 </span>
               )}
@@ -645,15 +711,15 @@ export default function Home() {
 
             {qcRunning && (
               <div className="mb-4">
-                <div className="mb-1 flex justify-between text-xs text-slate-500">
+                <div className="mb-1 flex justify-between text-xs text-light-text2 dark:text-dark-text2">
                   <span>
                     Evaluating {qcProgress.done} of {qcProgress.total}
                   </span>
                   <span>{qcPct}%</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-light-border dark:bg-dark-border">
                   <div
-                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    className="h-full rounded-full bg-success transition-all"
                     style={{ width: `${qcPct}%` }}
                   />
                 </div>
@@ -671,14 +737,31 @@ export default function Home() {
         )}
       </div>
 
-      <footer className="mt-10 text-center text-xs text-slate-400">
+      <footer className="mt-10 text-center text-xs text-light-text3 dark:text-dark-text3">
         MVP · Session-only working state · run history saved to KV. Deploy on Vercel (keep batch size 5 on Hobby).
       </footer>
 
       <TokenCostPanel summary={tokenSummary} />
         </>
       )}
+        </div>
       </main>
-    </>
+
+      <ConfirmModal
+        open={pendingStep !== null}
+        title="Clear results?"
+        body={
+          pendingStep !== null
+            ? `Going back to ${STEP_NAMES[pendingStep]} will clear your generated emails and QC results. Continue?`
+            : ""
+        }
+        onConfirm={() => {
+          const s = pendingStep;
+          setPendingStep(null);
+          if (s !== null) executeStepNav(s);
+        }}
+        onCancel={() => setPendingStep(null)}
+      />
+    </div>
   );
 }
