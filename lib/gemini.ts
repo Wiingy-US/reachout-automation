@@ -1,24 +1,30 @@
 // Server-side Gemini client + prompt builders (spec section 09).
 // The API key is read from the environment and never leaves the server.
+// Uses the @google/genai SDK with thinking disabled (thinkingBudget: 0).
 
-import { GenerateContentResponse, GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import { JournalistRow, TokenUsage } from "./types";
 import { LAYER2_CHECKS } from "./rubric";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
-function client(): GoogleGenerativeAI {
+// Thinking disabled everywhere — applied to every generateContent() call.
+const NO_THINKING = { thinkingConfig: { thinkingBudget: 0 } } as const;
+
+function client(): GoogleGenAI {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     throw new Error(
       "GEMINI_API_KEY is not set. Copy .env.example to .env.local and add your key."
     );
   }
-  return new GoogleGenerativeAI(key);
+  return new GoogleGenAI({ apiKey: key });
 }
 
-function getModel() {
-  return client().getGenerativeModel({ model: MODEL });
+/** Read text from a @google/genai response (`text` is a getter property). */
+function responseText(response: GenerateContentResponse): string {
+  const t = (response as { text?: unknown }).text;
+  return typeof t === "function" ? (t as () => string)() : ((t as string) ?? "");
 }
 
 /** Strip ```json fences and grab the first JSON object from a model response. */
@@ -34,24 +40,41 @@ export function extractJson(text: string): any {
 }
 
 /**
- * Pull token usage from a Gemini response's usageMetadata. Falls back to a
- * rough length/4 estimate if the SDK doesn't surface metadata.
+ * Pull token usage from a @google/genai response's usageMetadata. Falls back to
+ * a rough length/4 estimate if the SDK doesn't surface metadata. Thinking tokens
+ * are excluded from the billed count (we disable thinking via thinkingBudget: 0).
  */
 export function extractTokenUsage(
   response: GenerateContentResponse,
   fallbackInput?: string,
   fallbackOutput?: string
 ): TokenUsage {
-  const meta = response.usageMetadata;
+  const meta = response.usageMetadata as
+    | {
+        promptTokenCount?: number;
+        candidatesTokenCount?: number;
+        thoughtsTokenCount?: number;
+        totalTokenCount?: number;
+      }
+    | undefined;
+
   if (meta?.promptTokenCount !== undefined) {
     const input = meta.promptTokenCount;
     const output = meta.candidatesTokenCount ?? 0;
+    const thoughts = meta.thoughtsTokenCount ?? 0;
+    if (thoughts > 0) {
+      console.warn(
+        `[gemini] thoughtsTokenCount=${thoughts} despite thinkingBudget:0 — thinking is still running.`
+      );
+    }
+    // Exclude thinking tokens from the billed total.
     return {
       input_tokens: input,
       output_tokens: output,
-      total_tokens: meta.totalTokenCount ?? input + output,
+      total_tokens: input + output,
     };
   }
+
   // Fallback estimation (~4 chars per token).
   const input = Math.round((fallbackInput?.length ?? 0) / 4);
   const output = Math.round((fallbackOutput?.length ?? 0) / 4);
@@ -122,14 +145,19 @@ export async function generateBatch(
   rows: JournalistRow[],
   dataFactsSummary = ""
 ): Promise<{ raw: string; usage: TokenUsage }> {
-  const model = getModel();
+  const ai = client();
   const promptText = buildGenerationPrompt(basePrompt, rows, dataFactsSummary);
-  const res = await model.generateContent({
+  const response = await ai.models.generateContent({
+    model: MODEL,
     contents: [{ role: "user", parts: [{ text: promptText }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 16384 },
+    config: {
+      temperature: 0.7,
+      maxOutputTokens: 16384,
+      ...NO_THINKING,
+    },
   });
-  const raw = res.response.text();
-  return { raw, usage: extractTokenUsage(res.response, promptText, raw) };
+  const raw = responseText(response);
+  return { raw, usage: extractTokenUsage(response, promptText, raw) };
 }
 
 // ---------------------------------------------------------------------------
@@ -203,14 +231,20 @@ ${JUDGE_SCHEMA}`;
 export async function runJudge(
   input: JudgeInput
 ): Promise<{ output: JudgeOutput; usage: TokenUsage }> {
-  const model = getModel();
+  const ai = client();
   const promptText = buildJudgePrompt(input);
-  const res = await model.generateContent({
+  const response = await ai.models.generateContent({
+    model: MODEL,
     contents: [{ role: "user", parts: [{ text: promptText }] }],
-    generationConfig: { responseMimeType: "application/json", temperature: 0 },
+    config: {
+      responseMimeType: "application/json",
+      temperature: 0,
+      maxOutputTokens: 16384,
+      ...NO_THINKING,
+    },
   });
-  const text = res.response.text();
-  const usage = extractTokenUsage(res.response, promptText, text);
+  const text = responseText(response);
+  const usage = extractTokenUsage(response, promptText, text);
   const json = extractJson(text);
   if (!Array.isArray(json.checks)) {
     throw new Error("Judge response missing 'checks' array");
