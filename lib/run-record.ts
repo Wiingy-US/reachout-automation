@@ -7,6 +7,7 @@ import { GeneratedEmail, RunRecord, SessionTokenSummary } from "./types";
 // Note: this codebase stores quality results on each GeneratedEmail
 // (`email.quality.verdict`), not in a separate Map, so the params reflect that.
 export function buildRunRecord(params: {
+  id?: string; // stable session run id so post-generation + post-QC saves update the same record
   user_name: string;
   campaign_name: string;
   total_journalists: number;
@@ -15,6 +16,7 @@ export function buildRunRecord(params: {
   token_summary: SessionTokenSummary;
 }): RunRecord {
   const {
+    id,
     user_name,
     campaign_name,
     total_journalists,
@@ -25,8 +27,7 @@ export function buildRunRecord(params: {
 
   const succeeded = generated_emails.filter((e) => e.status === "generated").length;
   const failed = generated_emails.filter((e) => e.status === "generation_failed").length;
-  const total_batches =
-    batch_size > 0 ? Math.ceil((succeeded + failed) / batch_size) : 0;
+  const total_batches = batch_size > 0 ? Math.ceil(total_journalists / batch_size) : 0;
 
   const evaluated = generated_emails.filter((e) => e.quality);
   const qc_passed = evaluated.filter((e) => e.quality!.verdict === "PASS").length;
@@ -39,7 +40,7 @@ export function buildRunRecord(params: {
   const qc = token_summary.breakdown.quality_check;
 
   return {
-    id: crypto.randomUUID(),
+    id: id ?? crypto.randomUUID(),
     created_at: new Date().toISOString(),
     user_name,
     campaign_name,
