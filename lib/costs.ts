@@ -13,10 +13,10 @@ import {
 
 export const GEMINI_PRICING = {
   model: "gemini-2.5-flash",
-  // Price per 1,000 tokens in USD.
-  input_per_1k_tokens: 0.0003, // $0.30 / 1M input tokens
-  output_per_1k_tokens: 0.0025, // $2.50 / 1M output tokens
-  // Note: these are approximate — actual billing may differ.
+  // Thinking disabled via thinkingBudget: 0.
+  // Verified June 2026 — re-check at ai.google.dev/pricing
+  input_per_1k_tokens: 0.0003, // $0.30 per 1M input tokens
+  output_per_1k_tokens: 0.0025, // $2.50 per 1M output tokens
 };
 
 export function calculateCost(usage: TokenUsage): CostEstimate {
