@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CsvValidationResult,
   GeneratedEmail,
@@ -10,21 +10,46 @@ import {
 import { summarise } from "@/lib/quality";
 import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
+import { buildRunRecord } from "@/lib/run-record";
 import { Button, Section, Spinner } from "@/components/ui";
 import { StepIndicator } from "@/components/StepIndicator";
 import { CsvUpload } from "@/components/CsvUpload";
 import { SummaryBar } from "@/components/SummaryBar";
 import { PreviewTable } from "@/components/PreviewTable";
 import { TokenCostPanel } from "@/components/TokenCostPanel";
+import { CampaignPicker } from "@/components/CampaignPicker";
+import { Dashboard } from "@/components/Dashboard";
+
+const USER_NAME_KEY = "reachout_user_name";
 
 const BATCH_SIZES = [3, 5, 10, 25];
 const QC_CONCURRENCY = 4;
 
 export default function Home() {
+  // Top-level tab
+  const [activeTab, setActiveTab] = useState<"generate" | "dashboard">("generate");
+
+  // Session identity
+  const [userName, setUserName] = useState("");
+  const [campaignName, setCampaignName] = useState("");
+  // Stable id for this run so the post-generation and post-QC saves update the
+  // same record rather than creating duplicates.
+  const [runId, setRunId] = useState<string | null>(null);
+
   // Step 1 — manual campaign setup (prompt + data facts, entered by the user)
   const [prompt, setPrompt] = useState("");
   const [dataFacts, setDataFacts] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+
+  // Pre-fill the user's name from localStorage on return visits.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(USER_NAME_KEY);
+      if (saved) setUserName(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Step 2 — CSV
   const [csv, setCsv] = useState<CsvValidationResult | null>(null);
@@ -62,7 +87,40 @@ export default function Home() {
 
   const tokenSummary = useMemo(() => computeSessionSummary(tokenRecords), [tokenRecords]);
 
-  const setupReady = prompt.trim().length > 0 && dataFacts.trim().length > 0;
+  const setupReady =
+    userName.trim().length > 0 &&
+    campaignName.trim().length > 0 &&
+    prompt.trim().length > 0 &&
+    dataFacts.trim().length > 0;
+
+  // Assemble + persist a run record (never throws to the caller). Fresh emails
+  // and token records are passed in explicitly to avoid stale closure state.
+  async function saveRunRecord(
+    id: string,
+    emailsArg: GeneratedEmail[],
+    recordsArg: OperationTokenRecord[]
+  ) {
+    if (!userName.trim() || !campaignName.trim()) return;
+    const record = buildRunRecord({
+      id,
+      user_name: userName.trim(),
+      campaign_name: campaignName.trim(),
+      total_journalists: csv?.rows.length ?? emailsArg.length,
+      batch_size: batchSize,
+      generated_emails: emailsArg,
+      token_summary: computeSessionSummary(recordsArg),
+    });
+    try {
+      await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(record),
+      });
+    } catch (err) {
+      // Run-record saving must never break the main flow.
+      console.error("Failed to save run record:", err);
+    }
+  }
 
   // Current wizard stage for the step indicator.
   const currentStep = !confirmed
@@ -98,6 +156,8 @@ export default function Home() {
   async function handleGenerate() {
     if (!csv) return;
     const rows = csv.rows;
+    const newRunId = crypto.randomUUID();
+    setRunId(newRunId);
     setGenerating(true);
     setEmails([]);
     setQualityRun(false);
@@ -107,6 +167,7 @@ export default function Home() {
     setTokenRecords([]);
 
     const collected: GeneratedEmail[] = [];
+    const genRecords: OperationTokenRecord[] = [];
     for (let i = 0; i < rows.length; i += batchSize) {
       const chunk = rows.slice(i, i + batchSize);
       try {
@@ -124,7 +185,10 @@ export default function Home() {
         const batchEmails: GeneratedEmail[] = data.emails ?? [];
         collected.push(...batchEmails);
         const batchRecords: OperationTokenRecord[] = data.batch_token_records ?? [];
-        if (batchRecords.length) setTokenRecords((prev) => [...prev, ...batchRecords]);
+        if (batchRecords.length) {
+          genRecords.push(...batchRecords);
+          setTokenRecords((prev) => [...prev, ...batchRecords]);
+        }
       } catch (err: any) {
         chunk.forEach((row) =>
           collected.push({
@@ -143,6 +207,8 @@ export default function Home() {
       setGenProgress({ done: Math.min(i + batchSize, rows.length), total: rows.length });
     }
     setGenerating(false);
+    // Persist the run now (evaluation fields are 0 until QC runs).
+    saveRunRecord(newRunId, collected, genRecords);
   }
 
   // ---- Retry: re-run generation for failed rows only ----
@@ -223,6 +289,7 @@ export default function Home() {
     const updated = [...emails];
     const indexByRow = new Map(updated.map((e, idx) => [e.rowIndex, idx]));
     let done = 0;
+    const qcRecords: OperationTokenRecord[] = [];
 
     for (let i = 0; i < targets.length; i += QC_CONCURRENCY) {
       const slice = targets.slice(i, i + QC_CONCURRENCY);
@@ -240,7 +307,10 @@ export default function Home() {
               updated[idx] = { ...updated[idx], quality: data.quality };
             }
             const records: OperationTokenRecord[] = data.token_records ?? [];
-            if (records.length) setTokenRecords((prev) => [...prev, ...records]);
+            if (records.length) {
+              qcRecords.push(...records);
+              setTokenRecords((prev) => [...prev, ...records]);
+            }
           } catch {
             // leave unevaluated; surfaces as no badge
           } finally {
@@ -255,6 +325,12 @@ export default function Home() {
     setQualityRun(true);
     setQualityVersion((v) => v + 1);
     setQcRunning(false);
+
+    // Update the same run record with evaluation stats. tokenRecords (closure)
+    // already holds the generation records; append the QC records collected here.
+    const id = runId ?? crypto.randomUUID();
+    if (!runId) setRunId(id);
+    saveRunRecord(id, updated, [...tokenRecords, ...qcRecords]);
   }
 
   // ---- Export ----
@@ -286,16 +362,38 @@ export default function Home() {
   const qcPct =
     qcProgress.total === 0 ? 0 : Math.round((qcProgress.done / qcProgress.total) * 100);
 
+  const tabBtn = (tab: "generate" | "dashboard", label: string) => (
+    <button
+      type="button"
+      onClick={() => setActiveTab(tab)}
+      className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+        activeTab === tab
+          ? "bg-brand text-white"
+          : "bg-white text-slate-600 hover:bg-slate-100"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8">
+    <main className="mx-auto max-w-6xl px-4 py-8">
       <header className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Digital PR Outreach — MVP</h1>
         <p className="text-sm text-slate-500">
           Single-session tool · prompt + data facts → personalised pitch emails → quality check → AppScript CSV.
-          Nothing is stored; closing the tab clears everything.
         </p>
       </header>
 
+      <div className="mb-6 flex gap-2 border-b border-slate-200 pb-3">
+        {tabBtn("generate", "Generate")}
+        {tabBtn("dashboard", "Dashboard")}
+      </div>
+
+      {activeTab === "dashboard" ? (
+        <Dashboard />
+      ) : (
+        <>
       <StepIndicator current={currentStep} />
 
       <div className="space-y-5">
@@ -308,6 +406,41 @@ export default function Home() {
           done={confirmed}
         >
           <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Your Name
+                </label>
+                <input
+                  value={userName}
+                  onChange={(e) => {
+                    setUserName(e.target.value);
+                    try {
+                      localStorage.setItem(USER_NAME_KEY, e.target.value);
+                    } catch {
+                      /* ignore */
+                    }
+                    if (confirmed) setConfirmed(false);
+                  }}
+                  disabled={generating || qcRunning}
+                  placeholder="e.g. Rishi"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:bg-slate-50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Campaign
+                </label>
+                <CampaignPicker
+                  value={campaignName}
+                  onChange={(name) => {
+                    setCampaignName(name);
+                    if (confirmed) setConfirmed(false);
+                  }}
+                  disabled={generating || qcRunning}
+                />
+              </div>
+            </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Generation Prompt
@@ -535,10 +668,12 @@ export default function Home() {
       </div>
 
       <footer className="mt-10 text-center text-xs text-slate-400">
-        MVP · No auth · No database · Session-only state. Deploy on Vercel (keep batch size 5 on Hobby).
+        MVP · Session-only working state · run history saved to KV. Deploy on Vercel (keep batch size 5 on Hobby).
       </footer>
 
       <TokenCostPanel summary={tokenSummary} />
+        </>
+      )}
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getAllRuns, saveRun } from "@/lib/kv";
+import { getAllRuns, saveRun } from "@/lib/redis";
 import { RunRecord } from "@/lib/types";
 
 export const runtime = "nodejs";

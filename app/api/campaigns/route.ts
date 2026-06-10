@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getCampaigns, saveCampaign } from "@/lib/kv";
+import { getCampaigns, saveCampaign } from "@/lib/redis";
 
 export const runtime = "nodejs";
 
