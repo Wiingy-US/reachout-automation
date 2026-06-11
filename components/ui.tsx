@@ -78,14 +78,15 @@ export function Badge({
   tone,
   children,
 }: {
-  tone: "pass" | "fail" | "neutral" | "warn";
+  tone: "pass" | "fail" | "neutral" | "warn" | "generated";
   children: ReactNode;
 }) {
   const styles = {
-    pass: "bg-success-light text-success-text",
-    fail: "bg-danger-light text-danger-text",
+    pass: "bg-success-light text-success-text dark:bg-[#14532D] dark:text-[#86EFAC]",
+    fail: "bg-danger-light text-danger-text dark:bg-[#7F1D1D] dark:text-[#FCA5A5]",
     neutral: "bg-light-bg text-light-text3 dark:bg-dark-surface2 dark:text-dark-text3",
-    warn: "bg-warning-light text-warning-text",
+    warn: "bg-warning-light text-warning-text dark:bg-[#78350F] dark:text-[#FCD34D]",
+    generated: "bg-brand-light text-brand dark:bg-[#1E3A5F] dark:text-[#93C5FD]",
   }[tone];
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${styles}`}>

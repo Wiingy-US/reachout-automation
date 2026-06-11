@@ -132,7 +132,7 @@ export function Sidebar({
                           ? "text-brand"
                           : isCompleted
                           ? "text-light-text dark:text-dark-text"
-                          : "text-light-text3 dark:text-dark-text3"
+                          : "text-light-text3 dark:text-dark-text2"
                       }`}
                     >
                       {step.label}

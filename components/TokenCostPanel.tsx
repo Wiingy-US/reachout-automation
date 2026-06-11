@@ -55,7 +55,7 @@ export function TokenCostPanel({ summary }: { summary: SessionTokenSummary }) {
                 <td className="py-1 px-2 text-right tabular-nums text-light-text dark:text-dark-text">
                   {formatTokens(totals.output_tokens)}
                 </td>
-                <td className="py-1 pl-2 text-right font-bold tabular-nums text-brand">
+                <td className="py-1 pl-2 text-right font-bold tabular-nums text-brand dark:text-[#7B8FE8]">
                   ~{formatCost(totals.total_cost_usd)}
                 </td>
               </tr>

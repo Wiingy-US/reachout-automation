@@ -77,7 +77,7 @@ export function CsvUpload({
           </div>
 
           {result.invalidRows.length > 0 && (
-            <div className="max-h-32 overflow-auto rounded-lg border border-warning/30 bg-warning-light dark:bg-warning/10 p-2 text-xs text-warning-text">
+            <div className="max-h-32 overflow-auto rounded-lg border border-warning/30 bg-warning-light p-2 text-xs text-warning-text dark:border-warning dark:bg-[#2D1A00] dark:text-[#FCD34D]">
               {result.invalidRows.map((r) => (
                 <div key={r.rowIndex}>
                   Row {r.rowIndex + 1}: missing {r.missing.join(", ")}

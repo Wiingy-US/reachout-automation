@@ -74,8 +74,8 @@ function Drawer({ email }: { email: GeneratedEmail }) {
     const hint = failureHint(reason);
     return (
       <div>
-        <div className="mb-2 text-sm font-bold text-danger-text">Generation failed</div>
-        <div className="rounded-lg border border-danger/30 bg-danger-light dark:bg-danger/10 p-3 font-mono text-xs text-danger-text">
+        <div className="mb-2 text-sm font-bold text-danger-text dark:text-[#FCA5A5]">Generation failed</div>
+        <div className="rounded-lg border border-danger/30 bg-danger-light p-3 font-mono text-xs text-danger-text dark:border-danger dark:bg-[#2D0A0A] dark:text-[#FCA5A5]">
           {reason}
         </div>
         {hint && <p className="mt-2 text-xs font-medium text-warning-text">{hint}</p>}
@@ -170,7 +170,7 @@ export function PreviewTable({
                 <Fragment key={e.rowIndex}>
                   <tr
                     onClick={() => toggle(e.rowIndex)}
-                    className="cursor-pointer hover:bg-light-surface2 dark:hover:bg-dark-surface2"
+                    className="cursor-pointer hover:bg-light-surface2 dark:hover:bg-[#252848]"
                   >
                     <td className="px-3 py-2 text-light-text3 dark:text-dark-text3">{i + 1}</td>
                     <td className="px-3 py-2">
@@ -195,9 +195,9 @@ export function PreviewTable({
                     )}
                     <td className="px-3 py-2">
                       {failed ? (
-                        <Badge tone="fail">Generation Failed</Badge>
+                        <Badge tone="neutral">Generation Failed</Badge>
                       ) : (
-                        <Badge tone="neutral">Generated</Badge>
+                        <Badge tone="generated">Generated</Badge>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right text-light-text3 dark:text-dark-text3">

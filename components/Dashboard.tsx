@@ -12,9 +12,9 @@ function fmtDateTime(iso: string): string {
 }
 
 function passRateBadgeClass(p: number): string {
-  if (p >= 70) return "text-[#15803D] bg-wiingy-green-light";
-  if (p >= 50) return "text-[#B45309] bg-wiingy-amber-light";
-  return "text-[#DC2626] bg-wiingy-red-light";
+  if (p >= 70) return "text-[#15803D] bg-wiingy-green-light dark:bg-[#14532D] dark:text-[#86EFAC]";
+  if (p >= 50) return "text-[#B45309] bg-wiingy-amber-light dark:bg-[#78350F] dark:text-[#FCD34D]";
+  return "text-[#DC2626] bg-wiingy-red-light dark:bg-[#7F1D1D] dark:text-[#FCA5A5]";
 }
 
 type SortKey =
@@ -56,9 +56,13 @@ const COLUMNS: { key: SortKey; label: string; hideMobile: boolean }[] = [
 
 function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="flex-1 rounded-xl border border-wiingy-gray-border bg-light-surface dark:bg-dark-surface px-6 py-5">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-wiingy-gray">{label}</div>
-      <div className={`mt-1 text-[28px] font-bold ${accent ? "text-wiingy-blue" : "text-wiingy-dark"}`}>
+    <div className="flex-1 rounded-xl border border-light-border bg-light-surface px-6 py-5 dark:border-dark-border dark:bg-dark-surface dark:shadow-[0_1px_8px_rgba(0,0,0,0.4)]">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-light-text2 dark:text-dark-text3">{label}</div>
+      <div
+        className={`mt-1 text-[28px] font-bold ${
+          accent ? "text-brand dark:text-[#7B8FE8]" : "text-light-text dark:text-dark-text"
+        }`}
+      >
         {value}
       </div>
     </div>
@@ -213,9 +217,9 @@ export function Dashboard() {
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-danger/30 bg-danger-light dark:bg-danger/10 p-6 text-center">
-          <div className="font-semibold text-danger-text">Could not load run history.</div>
-          <p className="mt-1 text-sm text-danger-text">Check that Upstash Redis is connected in Vercel → Storage.</p>
+        <div className="rounded-lg border border-danger/30 bg-danger-light p-6 text-center dark:border-danger dark:bg-[#2D0A0A]">
+          <div className="font-semibold text-danger-text dark:text-[#FCA5A5]">Could not load run history.</div>
+          <p className="mt-1 text-sm text-danger-text dark:text-[#FCA5A5]">Check that Upstash Redis is connected in Vercel → Storage.</p>
         </div>
       ) : runs.length === 0 ? (
         <div className="rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface p-10 text-center">
@@ -254,7 +258,10 @@ export function Dashboard() {
                 {filtered.map((r) => {
                   const evaluated = r.evaluation.total_evaluated;
                   return (
-                    <tr key={r.id} className="hover:bg-light-surface2 dark:hover:bg-dark-surface2">
+                    <tr
+                      key={r.id}
+                      className="dark:even:bg-dark-surface2 hover:bg-light-surface2 dark:hover:bg-[#252848]"
+                    >
                       <td className="whitespace-nowrap px-3 py-2 text-light-text2 dark:text-dark-text2">{fmtDateTime(r.created_at)}</td>
                       <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{r.user_name}</td>
                       <td className="px-3 py-2 text-light-text dark:text-dark-text">{r.campaign_name}</td>
