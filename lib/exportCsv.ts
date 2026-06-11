@@ -8,7 +8,9 @@ export const EXPORT_COLUMNS = [
   "Subject",
   "HTML Body main email",
   "HTML Body followup email",
-  "quality_check_status",
+  "l1_score",
+  "l2_score",
+  "quality_verdict",
   "failed_checks",
 ] as const;
 
@@ -21,25 +23,27 @@ function csvCell(value: string): string {
 export function buildExportCsv(emails: GeneratedEmail[], qualityRun: boolean): string {
   const header = EXPORT_COLUMNS.join(",");
   const lines = emails.map((e) => {
-    let status = "NOT EVALUATED";
+    let l1 = "NOT EVALUATED";
+    let l2 = "NOT EVALUATED";
+    let verdict = "NOT_EVALUATED";
     let failed = "NOT EVALUATED";
     if (qualityRun && e.quality) {
-      status = e.quality.verdict;
-      if (e.quality.verdict === "PASS") {
-        failed = "";
-      } else {
-        const ids = [...e.quality.layer1, ...e.quality.layer2]
-          .filter((c) => !c.pass)
-          .map((c) => c.check_id);
-        failed = ids.join(", ");
-      }
+      l1 = String(e.quality.layer1_score);
+      l2 = e.quality.layer2_score < 0 ? "—" : String(e.quality.layer2_score);
+      verdict = e.quality.verdict;
+      const ids = [...e.quality.layer1, ...e.quality.layer2]
+        .filter((c) => !c.pass)
+        .map((c) => c.check_id);
+      failed = verdict === "PASS" ? "" : ids.join(", ");
     }
     return [
       csvCell(e.journalist.email),
       csvCell(e.subject),
       csvCell(e.email_1_html),
       csvCell(e.followup_html),
-      csvCell(status),
+      csvCell(l1),
+      csvCell(l2),
+      csvCell(verdict),
       csvCell(failed),
     ].join(",");
   });

@@ -1,8 +1,7 @@
-// Quality rubric v2 (29 checks: 17 deterministic + 12 LLM judge). Counts are
-// derived from this array (LAYER1_CHECKS / LAYER2_CHECKS) — never hardcode them.
-//
-// Layer 1 (deterministic) is evaluated server-side — see lib/deterministicChecks.ts.
-// Layer 2 (LLM judge) is evaluated by Gemini — see the judge prompt in lib/gemini.ts.
+// Quality rubric v2 (29 checks) with weighted scoring. Counts/weights are
+// derived from this array — never hardcode them.
+
+import type { CheckResult } from "./types";
 
 export const RUBRIC_CONFIG = {
   subjectMaxChars: 60,
@@ -13,8 +12,19 @@ export const RUBRIC_CONFIG = {
   potentialAnglesBullets: 2,
 };
 
+export const SCORING = {
+  critical_deduction: 20,
+  major_deduction: 10,
+  minor_deduction: 5,
+  l1_gate_threshold: 60, // L1 must reach this to run L2
+  l2_pass_threshold: 70, // L2 must reach this for PASS
+  starting_score: 100,
+  floor: 0,
+};
+
 export type Layer = 1 | 2;
 export type Target = "subject" | "main" | "followup";
+export type Tier = "critical" | "major" | "minor";
 
 export interface RubricCheck {
   id: string;
@@ -22,9 +32,30 @@ export interface RubricCheck {
   target: Target;
   question: string;
   idealAnswer: "Yes" | "No";
+  tier: Tier;
+  weight: number; // points deducted on failure
 }
 
-export const RUBRIC: RubricCheck[] = [
+// Source entries omit tier/weight; they're derived below from the tier sets.
+type RawCheck = Omit<RubricCheck, "tier" | "weight">;
+
+const CRITICAL = new Set(["MAIN-03", "MAIN-04", "MAIN-26", "FUP-02", "FUP-07", "MAIN-01", "MAIN-09"]);
+const MAJOR = new Set(["FUP-09", "FUP-11", "MAIN-31", "MAIN-28"]);
+
+function tierFor(id: string): Tier {
+  if (CRITICAL.has(id)) return "critical";
+  if (MAJOR.has(id)) return "major";
+  return "minor";
+}
+function weightFor(tier: Tier): number {
+  return tier === "critical"
+    ? SCORING.critical_deduction
+    : tier === "major"
+    ? SCORING.major_deduction
+    : SCORING.minor_deduction;
+}
+
+const RAW: RawCheck[] = [
   // ---- LAYER 1 — DETERMINISTIC (17) ----
 
   // Subject
@@ -167,8 +198,9 @@ export const RUBRIC: RubricCheck[] = [
     id: "MAIN-09",
     layer: 2,
     target: "main",
-    question: "Are all paragraphs appropriate length — no overly long blocks of text?",
-    idealAnswer: "Yes",
+    question:
+      "Does the email contain any paragraph over 3 sentences? (3 sentences is the maximum — flag if exceeded)",
+    idealAnswer: "No",
   },
   {
     id: "MAIN-11",
@@ -245,9 +277,31 @@ export const RUBRIC: RubricCheck[] = [
   },
 ];
 
+// Derive the full rubric with tier + weight assigned from the tier sets.
+export const RUBRIC: RubricCheck[] = RAW.map((c) => {
+  const tier = tierFor(c.id);
+  return { ...c, tier, weight: weightFor(tier) };
+});
+
 export const LAYER1_CHECKS = RUBRIC.filter((c) => c.layer === 1);
 export const LAYER2_CHECKS = RUBRIC.filter((c) => c.layer === 2);
 
 export function getCheck(id: string): RubricCheck | undefined {
   return RUBRIC.find((c) => c.id === id);
+}
+
+/** Weighted layer score: start at 100, subtract each failing check's weight. */
+export function calculateLayerScore(results: CheckResult[]): number {
+  const deductions = results
+    .filter((r) => !r.pass)
+    .reduce((sum, r) => sum + (getCheck(r.check_id)?.weight ?? SCORING.minor_deduction), 0);
+  return Math.max(SCORING.floor, SCORING.starting_score - deductions);
+}
+
+/** Pill colour band for a 0-100 score (or -1 = skipped). */
+export function scoreBand(score: number): "green" | "amber" | "red" | "skipped" {
+  if (score < 0) return "skipped";
+  if (score >= 85) return "green";
+  if (score >= 70) return "amber";
+  return "red";
 }

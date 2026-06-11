@@ -38,17 +38,26 @@ export interface GeneratedEmail {
 
 export type Answer = "Yes" | "No";
 
+export type Tier = "critical" | "major" | "minor";
+
 export interface CheckResult {
   check_id: string;
   question: string;
   model_answer: string; // may include specifics, e.g. "No — 234 words"
   pass: boolean;
+  layer?: 1 | 2;
+  tier?: Tier;
+  weight?: number; // points deducted on failure
 }
 
 export interface EmailQualityResult {
   layer1: CheckResult[];
   layer2: CheckResult[];
-  layer2Skipped: boolean; // true when Layer 1 failed so the LLM judge was not called
+  layer1_score: number; // 0-100
+  layer2_score: number; // 0-100, -1 if skipped
+  layer1_passed_gate: boolean; // L1 score >= gate threshold
+  layer2_passed: boolean; // L2 score >= pass threshold
+  layer2Skipped: boolean; // true when L1 below gate so the judge was not called
   verdict: "PASS" | "FAIL";
 }
 
@@ -57,6 +66,8 @@ export interface QualitySummary {
   pass: number;
   fail: number;
   passRate: number; // 0-100
+  avgL1Score: number; // 0-100
+  avgL2Score: number; // 0-100, -1 if all skipped
 }
 
 // ---- Token usage & cost tracking ----
@@ -123,6 +134,8 @@ export interface RunRecord {
     passed: number;
     failed: number;
     pass_rate: number; // 0-100
+    avg_l1_score?: number; // 0-100 (optional — runs before weighted scoring lack it)
+    avg_l2_score?: number; // 0-100, -1 if all skipped
     input_tokens: number;
     output_tokens: number;
     total_tokens: number;
