@@ -166,6 +166,10 @@ export default function Home() {
       token_summary: computeSessionSummary(recordsArg),
       generation_duration_ms: genMs,
       qc_duration_ms: qcMs,
+      generation_prompt: prompt,
+      data_facts_summary: dataFacts,
+      model: "gemini-2.5-flash",
+      sample_method: wasSampled ? "random" : "all",
     });
     try {
       await fetch("/api/runs", {
