@@ -11,6 +11,8 @@ import { summarise } from "@/lib/quality";
 import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
 import { formatDuration } from "@/lib/utils";
 import { randomSample } from "@/lib/sampling";
+import { DEFAULT_GENERATION_PROMPT } from "@/lib/defaultPrompt";
+import { ChevronRight } from "lucide-react";
 import { QCSampleSelector } from "@/components/QCSampleSelector";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
 import { buildRunRecord } from "@/lib/run-record";
@@ -64,8 +66,10 @@ export default function Home() {
   // same record rather than creating duplicates.
   const [runId, setRunId] = useState<string | null>(null);
 
-  // Step 1 — manual campaign setup (prompt + data facts, entered by the user)
-  const [prompt, setPrompt] = useState("");
+  // Step 1 — campaign setup. Prompt defaults to the locked Part A template
+  // (shown inside a collapsed chevron); data facts are entered per campaign.
+  const [prompt, setPrompt] = useState(DEFAULT_GENERATION_PROMPT);
+  const [promptOpen, setPromptOpen] = useState(false);
   const [dataFacts, setDataFacts] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
@@ -140,10 +144,11 @@ export default function Home() {
 
   const tokenSummary = useMemo(() => computeSessionSummary(tokenRecords), [tokenRecords]);
 
+  // Prompt is always pre-populated with the default, so only the user name,
+  // campaign, and data facts gate "Confirm & Continue".
   const setupReady =
     userName.trim().length > 0 &&
     campaignName.trim().length > 0 &&
-    prompt.trim().length > 0 &&
     dataFacts.trim().length > 0;
 
   // Assemble + persist a run record (never throws to the caller). Fresh emails
@@ -304,6 +309,7 @@ export default function Home() {
             rows: chunk,
             batchIndex: i / batchSize,
             dataFactsSummary: dataFacts,
+            campaignName,
           }),
         });
         const data = await res.json();
@@ -359,6 +365,7 @@ export default function Home() {
             rows: chunk,
             batchIndex: i / batchSize,
             dataFactsSummary: dataFacts,
+            campaignName,
           }),
         });
         const data = await res.json();
@@ -560,19 +567,54 @@ export default function Home() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">
-                Generation Prompt
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => {
-                  setPrompt(e.target.value);
-                  if (confirmed) setConfirmed(false);
-                }}
-                disabled={generating || qcRunning}
-                rows={20}
-                className="code-area w-full rounded-lg border border-light-border bg-light-surface text-light-text p-3 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:bg-light-surface2 dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text dark:disabled:bg-dark-surface"
-              />
+              <button
+                type="button"
+                onClick={() => setPromptOpen((o) => !o)}
+                className="flex w-full items-center gap-2 rounded-lg bg-light-surface2 px-4 py-3 text-left dark:bg-dark-surface2"
+              >
+                <ChevronRight
+                  size={16}
+                  className={`shrink-0 text-light-text2 transition-transform dark:text-dark-text2 ${
+                    promptOpen ? "rotate-90" : ""
+                  }`}
+                />
+                <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                  Generation Prompt (locked default)
+                </span>
+                <span className="ml-auto text-xs text-light-text2 dark:text-dark-text2">
+                  Click to view or edit
+                </span>
+              </button>
+              {promptOpen && (
+                <div className="mt-2">
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      if (confirmed) setConfirmed(false);
+                    }}
+                    disabled={generating || qcRunning}
+                    rows={24}
+                    className="code-area w-full rounded-lg border border-light-border bg-light-surface text-light-text p-3 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:bg-light-surface2 dark:border-dark-border dark:bg-dark-surface2 dark:text-dark-text dark:disabled:bg-dark-surface"
+                  />
+                  <div className="mt-1 flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrompt(DEFAULT_GENERATION_PROMPT);
+                        if (confirmed) setConfirmed(false);
+                      }}
+                      disabled={prompt === DEFAULT_GENERATION_PROMPT || generating || qcRunning}
+                      className="font-medium text-brand hover:underline disabled:opacity-40 disabled:no-underline"
+                    >
+                      Reset to default
+                    </button>
+                    <span className="text-light-text3 dark:text-dark-text3">
+                      {prompt.length} characters
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">

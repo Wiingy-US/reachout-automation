@@ -126,8 +126,12 @@ ${dataFactsSummary.trim()}
 export function buildGenerationPrompt(
   basePrompt: string,
   rows: JournalistRow[],
-  dataFactsSummary = ""
+  dataFactsSummary = "",
+  campaignName = ""
 ): string {
+  const campaignBlock = campaignName.trim()
+    ? `CAMPAIGN NAME (use this EXACT text as the study title in every email): ${campaignName.trim()}\n\n`
+    : "";
   const dataFactsBlock = dataFactsSummary.trim()
     ? `${buildDataFactsBlock(dataFactsSummary)}\n\n`
     : "";
@@ -135,7 +139,7 @@ export function buildGenerationPrompt(
 
 ${GENERATION_OUTPUT_SPEC}
 
-${dataFactsBlock}JOURNALIST PROFILES (generate one block per journalist below):
+${campaignBlock}${dataFactsBlock}JOURNALIST PROFILES (generate one block per journalist below):
 
 ${buildProfilesBlock(rows)}`;
 }
@@ -143,10 +147,11 @@ ${buildProfilesBlock(rows)}`;
 export async function generateBatch(
   basePrompt: string,
   rows: JournalistRow[],
-  dataFactsSummary = ""
+  dataFactsSummary = "",
+  campaignName = ""
 ): Promise<{ raw: string; usage: TokenUsage }> {
   const ai = client();
-  const promptText = buildGenerationPrompt(basePrompt, rows, dataFactsSummary);
+  const promptText = buildGenerationPrompt(basePrompt, rows, dataFactsSummary, campaignName);
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: [{ role: "user", parts: [{ text: promptText }] }],
