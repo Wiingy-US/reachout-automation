@@ -27,7 +27,7 @@ const THEME_KEY = "wiingy_theme";
 const USER_NAME_KEY = "reachout_user_name";
 
 const BATCH_SIZES = [3, 5, 10, 25];
-const QC_CONCURRENCY = 4;
+const QC_BATCH_SIZE = 5; // journalists per Layer 2 judge batch
 
 export default function Home() {
   // Top-level tab
@@ -379,34 +379,37 @@ export default function Home() {
     let done = 0;
     const qcRecords: OperationTokenRecord[] = [];
 
-    for (let i = 0; i < targets.length; i += QC_CONCURRENCY) {
-      const slice = targets.slice(i, i + QC_CONCURRENCY);
-      await Promise.all(
-        slice.map(async (email) => {
-          try {
-            const res = await fetch("/api/quality-check", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, dataFactsSummary: dataFacts }),
-            });
-            const data = await res.json();
-            const idx = indexByRow.get(email.rowIndex);
-            if (idx !== undefined && data.quality) {
-              updated[idx] = { ...updated[idx], quality: data.quality };
-            }
-            const records: OperationTokenRecord[] = data.token_records ?? [];
-            if (records.length) {
-              qcRecords.push(...records);
-              setTokenRecords((prev) => [...prev, ...records]);
-            }
-          } catch {
-            // leave unevaluated; surfaces as no badge
-          } finally {
-            done += 1;
-            setQcProgress({ done, total: targets.length });
+    // Send journalists to the route in batches; the route batches the Layer 2
+    // judge into one Gemini call per batch (≈ targets/5 calls instead of one
+    // per journalist).
+    for (let i = 0; i < targets.length; i += QC_BATCH_SIZE) {
+      const batch = targets.slice(i, i + QC_BATCH_SIZE);
+      try {
+        const res = await fetch("/api/quality-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emails: batch, dataFactsSummary: dataFacts }),
+        });
+        const data = await res.json();
+        const results: { rowIndex: number; quality: GeneratedEmail["quality"] }[] =
+          data.results ?? [];
+        for (const r of results) {
+          const idx = indexByRow.get(r.rowIndex);
+          if (idx !== undefined && r.quality) {
+            updated[idx] = { ...updated[idx], quality: r.quality };
           }
-        })
-      );
+        }
+        const records: OperationTokenRecord[] = data.token_records ?? [];
+        if (records.length) {
+          qcRecords.push(...records);
+          setTokenRecords((prev) => [...prev, ...records]);
+        }
+      } catch {
+        // leave this batch unevaluated; surfaces as no badge
+      } finally {
+        done += batch.length;
+        setQcProgress({ done, total: targets.length });
+      }
       setEmails([...updated]);
     }
 

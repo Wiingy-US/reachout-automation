@@ -3,7 +3,7 @@
 // Uses the @google/genai SDK with thinking disabled (thinkingBudget: 0).
 
 import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
-import { JournalistRow, TokenUsage } from "./types";
+import { GeneratedEmail, JournalistRow, TokenUsage } from "./types";
 import { LAYER2_CHECKS } from "./rubric";
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
@@ -161,27 +161,8 @@ export async function generateBatch(
 }
 
 // ---------------------------------------------------------------------------
-// 9.3 — Quality check judge (per email, Layer 2)
+// Quality check judge — Layer 2, batched (up to N journalists per call)
 // ---------------------------------------------------------------------------
-
-function buildRubricBlock(): string {
-  return LAYER2_CHECKS.map(
-    (c) => `- ${c.id}: ${c.question} (ideal answer: ${c.idealAnswer})`
-  ).join("\n");
-}
-
-const JUDGE_SCHEMA = `{ "checks": [ { "check_id": "string", "model_answer": "Yes" | "No", "pass": true } ], "email_verdict": "PASS" | "FAIL" }`;
-
-export interface JudgeInput {
-  dataFactsSummary: string;
-  firstName: string;
-  lastName: string;
-  organisation: string;
-  bio: string;
-  subject: string;
-  email1Html: string;
-  followupHtml: string;
-}
 
 export interface JudgeCheck {
   check_id: string;
@@ -189,50 +170,97 @@ export interface JudgeCheck {
   pass: boolean;
 }
 
-export interface JudgeOutput {
+export interface JudgeBatchItem {
+  journalist_email: string;
   checks: JudgeCheck[];
-  email_verdict: "PASS" | "FAIL";
 }
 
-export function buildJudgePrompt(input: JudgeInput): string {
-  return `You are a strict quality auditor for journalist pitch emails. Evaluate the provided email against the rubric below. Return ONLY a valid JSON object matching the schema exactly. No commentary. No markdown. Every check_id listed in the rubric MUST appear in the output — ${LAYER2_CHECKS.length} checks total — with no extras and no omissions.
+// Detailed Layer 2 rubric guidance (kept verbatim so the judge has the nuance
+// the deterministic layer can't capture).
+const L2_RUBRIC_BLOCK = `MAIN-01: Do all statistics match the permitted data facts? Pass = Yes (no hallucinated or altered numbers).
+MAIN-12: Is the introduction (before Key Findings) 5 sentences or fewer? Pass = Yes.
+MAIN-28: Do at least 2 of the 3 Key Findings bullets contain a real figure or number? Pass = Yes.
+MAIN-30: Are the three Key Findings independent — no restatement of the same stat or cause-effect? Pass = Yes.
+MAIN-31: Does the opening hook reference ONLY facts from the journalist's supplied bio — no invented work, employer, or beat? Pass = Yes.
+MAIN-33: Does the intro consist of exactly two paragraphs before Key Findings (hook + Wiingy/study intro)? Pass = Yes.
+MAIN-37: Does EACH Key Finding bullet contain a <b> tag wrapping a stat-phrase (a number WITH its 1 to 3 word descriptor — not a number alone, not a city name alone)? Example pass: <b>74% guitar advantage</b>. Example fail: <b>74%</b> or <b>Nashville</b>. Pass = Yes (all 3 bullets correct).
+MAIN-38: Is the study title referenced verbatim using the exact EMAIL TITLE from the data facts? Pass = Yes.
+MAIN-39: If the journalist's bio indicates they cover a city that appears in the verified data, does the LEAD Key Finding bullet use that specific city's figures? If no city match: automatically Pass = Yes.
+FUP-11: Does the follow-up opening reconnect to a specific finding, city, or stat from the initial pitch? Pass = Yes.
+FUP-12: Are BOTH follow-up bullets data points that do NOT appear in the initial pitch email? Pass = Yes.`;
 
-PERMITTED DATA FACTS: These are the only statistics and findings the email is allowed to reference.
+function buildBatchJudgePrompt(emails: GeneratedEmail[], dataFactsSummary: string): string {
+  const journalistBlocks = emails
+    .map((e, i) => {
+      const j = e.journalist;
+      return `---JOURNALIST ${i + 1}---
+Email: ${j.email}
+Bio: ${j.about_bio?.trim() ? j.about_bio.trim() : "(none provided)"}
+Organisation: ${j.organisation}
+
+SUBJECT: ${e.subject}
+
+EMAIL 1 HTML:
 """
-${input.dataFactsSummary}
+${e.email_1_html}
 """
 
-JOURNALIST PROFILE (ground truth for personalisation check):
-First Name: ${input.firstName}
-Last Name: ${input.lastName}
-Organisation: ${input.organisation}
-Bio: ${input.bio?.trim() ? input.bio.trim() : "(none provided)"}
-
-The bio above is the ONLY source of truth for MAIN-31. When evaluating MAIN-31, check whether every specific claim in the opening hook (specific publications, events, projects, motivations, career moves) can be traced to a fact explicitly stated in the bio above. Pass = every hook claim is traceable to the bio, OR the hook only references their beat/outlet without specific claims. Fail = the hook contains specific details (motivations, named works, career history) that are NOT present in the bio above.
-
-EMAIL UNDER REVIEW:
-SUBJECT: ${input.subject}
-EMAIL_1_HTML:
+FOLLOW-UP HTML:
 """
-${input.email1Html}
+${e.followup_html}
+"""`;
+    })
+    .join("\n\n");
+
+  return `You are a strict quality auditor for journalist pitch emails.
+
+Evaluate each journalist's emails below against the rubric.
+
+Return ONLY a valid JSON array — one object per journalist, in the same order as provided. No commentary, no markdown, no preamble. Every check_id must appear for every journalist.
+
+SCHEMA (one object per journalist):
+{ "journalist_email": "...", "checks": [ { "check_id": "MAIN-01", "model_answer": "Yes|No", "pass": true } /* all ${LAYER2_CHECKS.length} L2 checks */ ], "verdict": "PASS|FAIL" }
+
+The ${LAYER2_CHECKS.length} check_ids to include for every journalist, in order:
+${LAYER2_CHECKS.map((c) => c.id).join(", ")}
+
+PERMITTED DATA FACTS (ground truth for all journalists):
 """
-FOLLOW_UP_1_HTML:
-"""
-${input.followupHtml}
+${dataFactsSummary}
 """
 
-RUBRIC (evaluate each; set model_answer to "Yes" or "No"; set pass=true only when model_answer equals the ideal answer):
-${buildRubricBlock()}
+RUBRIC (apply to every journalist; set pass=true only when the ideal condition is met):
+${L2_RUBRIC_BLOCK}
 
-OUTPUT SCHEMA (return exactly this shape):
-${JUDGE_SCHEMA}`;
+NOW EVALUATE EACH JOURNALIST:
+
+${journalistBlocks}`;
 }
 
-export async function runJudge(
-  input: JudgeInput
-): Promise<{ output: JudgeOutput; usage: TokenUsage }> {
+/** Strip markdown fences and parse the first JSON array in the text. */
+function extractJsonArray(text: string): any[] {
+  let t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
+  const start = t.indexOf("[");
+  const end = t.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error("No JSON array found in batch judge response");
+  }
+  const parsed = JSON.parse(t.slice(start, end + 1));
+  if (!Array.isArray(parsed)) throw new Error("Batch judge response is not an array");
+  return parsed;
+}
+
+/**
+ * Evaluate up to N journalists' emails in a single Gemini call. Returns the
+ * per-journalist check arrays plus the (batch) token usage. Throws if the
+ * response can't be parsed at all — the caller decides how to mark the batch.
+ */
+export async function runLayer2JudgeBatch(
+  emails: GeneratedEmail[],
+  dataFactsSummary: string
+): Promise<{ items: JudgeBatchItem[]; usage: TokenUsage }> {
   const ai = client();
-  const promptText = buildJudgePrompt(input);
+  const promptText = buildBatchJudgePrompt(emails, dataFactsSummary);
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: [{ role: "user", parts: [{ text: promptText }] }],
@@ -245,9 +273,10 @@ export async function runJudge(
   });
   const text = responseText(response);
   const usage = extractTokenUsage(response, promptText, text);
-  const json = extractJson(text);
-  if (!Array.isArray(json.checks)) {
-    throw new Error("Judge response missing 'checks' array");
-  }
-  return { output: json as JudgeOutput, usage };
+  const arr = extractJsonArray(text);
+  const items: JudgeBatchItem[] = arr.map((o) => ({
+    journalist_email: String(o?.journalist_email ?? ""),
+    checks: Array.isArray(o?.checks) ? (o.checks as JudgeCheck[]) : [],
+  }));
+  return { items, usage };
 }
