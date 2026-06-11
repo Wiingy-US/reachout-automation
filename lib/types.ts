@@ -134,6 +134,13 @@ export interface RunRecord {
     total_tokens: number;
     total_cost_usd: number;
   };
+
+  // Wall-clock timing (optional — runs saved before this feature lack it).
+  duration?: {
+    generation_ms: number; // ms from generation start to end
+    evaluation_ms: number; // ms from QC start to end
+    total_ms: number; // generation_ms + evaluation_ms
+  };
 }
 
 export interface CampaignRecord {

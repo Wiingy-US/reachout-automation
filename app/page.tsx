@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CsvValidationResult,
   GeneratedEmail,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/types";
 import { summarise } from "@/lib/quality";
 import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
+import { formatDuration } from "@/lib/utils";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
 import { buildRunRecord } from "@/lib/run-record";
 import { Button, Section, Spinner } from "@/components/ui";
@@ -99,6 +100,21 @@ export default function Home() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryProgress, setRetryProgress] = useState<{ current: number; total: number } | null>(null);
 
+  // Run-duration tracking.
+  const generationStartTime = useRef<number>(0);
+  const qcStartTime = useRef<number>(0);
+  const [generationDurationMs, setGenerationDurationMs] = useState<number>(0);
+  const [qcDurationMs, setQcDurationMs] = useState<number>(0);
+  // Live elapsed counter (runs while generating or quality-checking).
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    if (!generating && !qcRunning) return;
+    setElapsedMs(0);
+    const start = Date.now();
+    const interval = setInterval(() => setElapsedMs(Date.now() - start), 1000);
+    return () => clearInterval(interval);
+  }, [generating, qcRunning]);
+
   const generated = emails.length > 0;
   const generatedOk = useMemo(() => emails.filter((e) => e.status === "generated"), [emails]);
   const failedCount = useMemo(
@@ -123,7 +139,9 @@ export default function Home() {
   async function saveRunRecord(
     id: string,
     emailsArg: GeneratedEmail[],
-    recordsArg: OperationTokenRecord[]
+    recordsArg: OperationTokenRecord[],
+    genMs = 0,
+    qcMs = 0
   ) {
     if (!userName.trim() || !campaignName.trim()) return;
     const record = buildRunRecord({
@@ -134,6 +152,8 @@ export default function Home() {
       batch_size: batchSize,
       generated_emails: emailsArg,
       token_summary: computeSessionSummary(recordsArg),
+      generation_duration_ms: genMs,
+      qc_duration_ms: qcMs,
     });
     try {
       await fetch("/api/runs", {
@@ -246,6 +266,7 @@ export default function Home() {
     const rows = csv.rows;
     const newRunId = crypto.randomUUID();
     setRunId(newRunId);
+    generationStartTime.current = Date.now();
     setGenerating(true);
     setEmails([]);
     setQualityRun(false);
@@ -295,8 +316,10 @@ export default function Home() {
       setGenProgress({ done: Math.min(i + batchSize, rows.length), total: rows.length });
     }
     setGenerating(false);
+    const genMs = Date.now() - generationStartTime.current;
+    setGenerationDurationMs(genMs);
     // Persist the run now (evaluation fields are 0 until QC runs).
-    saveRunRecord(newRunId, collected, genRecords);
+    saveRunRecord(newRunId, collected, genRecords, genMs, 0);
   }
 
   // ---- Retry: re-run generation for failed rows only ----
@@ -371,6 +394,7 @@ export default function Home() {
     // Only evaluate rows that don't already have a result — this preserves
     // passing rows across a retry and avoids re-spending tokens on them.
     const targets = generatedOk.filter((e) => !e.quality);
+    qcStartTime.current = Date.now();
     setQcRunning(true);
     setQcProgress({ done: 0, total: targets.length });
 
@@ -416,12 +440,14 @@ export default function Home() {
     setQualityRun(true);
     setQualityVersion((v) => v + 1);
     setQcRunning(false);
+    const qcMs = Date.now() - qcStartTime.current;
+    setQcDurationMs(qcMs);
 
     // Update the same run record with evaluation stats. tokenRecords (closure)
     // already holds the generation records; append the QC records collected here.
     const id = runId ?? crypto.randomUUID();
     if (!runId) setRunId(id);
-    saveRunRecord(id, updated, [...tokenRecords, ...qcRecords]);
+    saveRunRecord(id, updated, [...tokenRecords, ...qcRecords], generationDurationMs, qcMs);
   }
 
   // ---- Export ----
@@ -635,6 +661,7 @@ export default function Home() {
               <div className="mb-1 flex justify-between text-xs text-light-text2 dark:text-dark-text2">
                 <span>
                   {genProgress.done} of {genProgress.total} journalists processed
+                  {generating && ` · Elapsed: ${formatDuration(elapsedMs)}`}
                 </span>
                 <span>{genPct}%</span>
               </div>
@@ -717,6 +744,7 @@ export default function Home() {
                 <div className="mb-1 flex justify-between text-xs text-light-text2 dark:text-dark-text2">
                   <span>
                     Evaluating {qcProgress.done} of {qcProgress.total}
+                    {qcRunning && ` · Elapsed: ${formatDuration(elapsedMs)}`}
                   </span>
                   <span>{qcPct}%</span>
                 </div>

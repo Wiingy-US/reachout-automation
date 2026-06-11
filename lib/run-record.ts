@@ -14,6 +14,8 @@ export function buildRunRecord(params: {
   batch_size: number;
   generated_emails: GeneratedEmail[];
   token_summary: SessionTokenSummary;
+  generation_duration_ms?: number;
+  qc_duration_ms?: number;
 }): RunRecord {
   const {
     id,
@@ -23,6 +25,8 @@ export function buildRunRecord(params: {
     batch_size,
     generated_emails,
     token_summary,
+    generation_duration_ms = 0,
+    qc_duration_ms = 0,
   } = params;
 
   const succeeded = generated_emails.filter((e) => e.status === "generated").length;
@@ -68,6 +72,11 @@ export function buildRunRecord(params: {
     totals: {
       total_tokens: token_summary.totals.total_tokens,
       total_cost_usd: token_summary.totals.total_cost_usd,
+    },
+    duration: {
+      generation_ms: generation_duration_ms,
+      evaluation_ms: qc_duration_ms,
+      total_ms: generation_duration_ms + qc_duration_ms,
     },
   };
 }
