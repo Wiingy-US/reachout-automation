@@ -175,19 +175,11 @@ export interface JudgeBatchItem {
   checks: JudgeCheck[];
 }
 
-// Detailed Layer 2 rubric guidance (kept verbatim so the judge has the nuance
-// the deterministic layer can't capture).
-const L2_RUBRIC_BLOCK = `MAIN-01: Do all statistics match the permitted data facts? Pass = Yes (no hallucinated or altered numbers).
-MAIN-12: Is the introduction (before Key Findings) 5 sentences or fewer? Pass = Yes.
-MAIN-28: Do at least 2 of the 3 Key Findings bullets contain a real figure or number? Pass = Yes.
-MAIN-30: Are the three Key Findings independent — no restatement of the same stat or cause-effect? Pass = Yes.
-MAIN-31: Does the opening hook reference ONLY facts from the journalist's supplied bio — no invented work, employer, or beat? Pass = Yes.
-MAIN-33: Does the intro consist of exactly two paragraphs before Key Findings (hook + Wiingy/study intro)? Pass = Yes.
-MAIN-37: Does EACH Key Finding bullet contain a <b> tag wrapping a stat-phrase (a number WITH its 1 to 3 word descriptor — not a number alone, not a city name alone)? Example pass: <b>74% guitar advantage</b>. Example fail: <b>74%</b> or <b>Nashville</b>. Pass = Yes (all 3 bullets correct).
-MAIN-38: Is the study title referenced verbatim using the exact EMAIL TITLE from the data facts? Pass = Yes.
-MAIN-39: If the journalist's bio indicates they cover a city that appears in the verified data, does the LEAD Key Finding bullet use that specific city's figures? If no city match: automatically Pass = Yes.
-FUP-11: Does the follow-up opening reconnect to a specific finding, city, or stat from the initial pitch? Pass = Yes.
-FUP-12: Are BOTH follow-up bullets data points that do NOT appear in the initial pitch email? Pass = Yes.`;
+// Layer 2 rubric guidance, built from the rubric so it always matches the
+// current LAYER2_CHECKS (id, question, ideal answer).
+function buildL2RubricBlock(): string {
+  return LAYER2_CHECKS.map((c) => `${c.id}: ${c.question} Pass = ${c.idealAnswer}.`).join("\n");
+}
 
 function buildBatchJudgePrompt(emails: GeneratedEmail[], dataFactsSummary: string): string {
   const journalistBlocks = emails
@@ -229,8 +221,8 @@ PERMITTED DATA FACTS (ground truth for all journalists):
 ${dataFactsSummary}
 """
 
-RUBRIC (apply to every journalist; set pass=true only when the ideal condition is met):
-${L2_RUBRIC_BLOCK}
+RUBRIC (${LAYER2_CHECKS.length} checks total — every check_id above must appear; set pass=true only when the ideal condition is met):
+${buildL2RubricBlock()}
 
 NOW EVALUATE EACH JOURNALIST:
 

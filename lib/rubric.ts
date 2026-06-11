@@ -1,10 +1,8 @@
-// Quality rubric v3. Counts are derived from this array (LAYER1_CHECKS /
-// LAYER2_CHECKS) — never hardcode them elsewhere.
+// Quality rubric v2 (29 checks: 17 deterministic + 12 LLM judge). Counts are
+// derived from this array (LAYER1_CHECKS / LAYER2_CHECKS) — never hardcode them.
 //
-// Layer 1 (deterministic) is evaluated server-side with pure string/regex/HTML
-// parsing — see lib/deterministicChecks.ts.
-// Layer 2 (LLM judge) is evaluated by Gemini in batches — see the batch judge
-// prompt in lib/gemini.ts.
+// Layer 1 (deterministic) is evaluated server-side — see lib/deterministicChecks.ts.
+// Layer 2 (LLM judge) is evaluated by Gemini — see the judge prompt in lib/gemini.ts.
 
 export const RUBRIC_CONFIG = {
   subjectMaxChars: 60,
@@ -13,7 +11,6 @@ export const RUBRIC_CONFIG = {
   introMaxSentences: 5,
   keyFindingsBullets: 3,
   potentialAnglesBullets: 2,
-  followupBullets: 2,
 };
 
 export type Layer = 1 | 2;
@@ -28,7 +25,7 @@ export interface RubricCheck {
 }
 
 export const RUBRIC: RubricCheck[] = [
-  // ---- LAYER 1 — DETERMINISTIC (19) ----
+  // ---- LAYER 1 — DETERMINISTIC (17) ----
 
   // Subject
   {
@@ -72,7 +69,7 @@ export const RUBRIC: RubricCheck[] = [
     id: "MAIN-07",
     layer: 1,
     target: "main",
-    question: "Are both 'Key Findings:' and 'Potential Angles:' labels present AND wrapped in <b> tags?",
+    question: "Does the email include both 'Key Findings:' and 'Potential Angles:' labels?",
     idealAnswer: "Yes",
   },
   {
@@ -118,13 +115,6 @@ export const RUBRIC: RubricCheck[] = [
       "Does the email contain forbidden HTML tags (<html> <head> <body> <style> <title> <meta> <!DOCTYPE>)?",
     idealAnswer: "No",
   },
-  {
-    id: "MAIN-36",
-    layer: 1,
-    target: "main",
-    question: "Does the CTA paragraph contain a question mark (CTA phrased as a question)?",
-    idealAnswer: "Yes",
-  },
 
   // Follow-up
   {
@@ -162,15 +152,8 @@ export const RUBRIC: RubricCheck[] = [
     question: "Does the follow-up sign-off end with exactly 'Best,' and nothing after it?",
     idealAnswer: "Yes",
   },
-  {
-    id: "FUP-13",
-    layer: 1,
-    target: "followup",
-    question: "Does the follow-up contain exactly 2 bullets?",
-    idealAnswer: "Yes",
-  },
 
-  // ---- LAYER 2 — LLM JUDGE (11) ----
+  // ---- LAYER 2 — LLM JUDGE (12) ----
 
   // Main email
   {
@@ -179,6 +162,20 @@ export const RUBRIC: RubricCheck[] = [
     target: "main",
     question: "Do all statistics match the permitted data facts — no hallucinated or altered numbers?",
     idealAnswer: "Yes",
+  },
+  {
+    id: "MAIN-09",
+    layer: 2,
+    target: "main",
+    question: "Are all paragraphs appropriate length — no overly long blocks of text?",
+    idealAnswer: "Yes",
+  },
+  {
+    id: "MAIN-11",
+    layer: 2,
+    target: "main",
+    question: "Does the email mention a page count or page numbers from the report?",
+    idealAnswer: "No",
   },
   {
     id: "MAIN-12",
@@ -217,42 +214,33 @@ export const RUBRIC: RubricCheck[] = [
     idealAnswer: "Yes",
   },
   {
-    id: "MAIN-37",
+    id: "MAIN-34",
     layer: 2,
     target: "main",
-    question:
-      "Does each Key Finding bullet contain a bolded stat-phrase (a number with its 1-3 word descriptor — not a number alone or city name alone)?",
-    idealAnswer: "Yes",
-  },
-  {
-    id: "MAIN-38",
-    layer: 2,
-    target: "main",
-    question: "Is the study title referenced verbatim using the exact EMAIL TITLE from the verified data?",
-    idealAnswer: "Yes",
-  },
-  {
-    id: "MAIN-39",
-    layer: 2,
-    target: "main",
-    question:
-      "If the journalist covers a city present in the verified data, does the lead Key Finding use that city's specific figures?",
+    question: "Does each Potential Angles bullet have a 3-4 word headline followed by a one-line description?",
     idealAnswer: "Yes",
   },
 
   // Follow-up
   {
-    id: "FUP-11",
+    id: "FUP-06",
     layer: 2,
     target: "followup",
-    question: "Does the follow-up reconnect to a specific finding or topic from the initial pitch?",
+    question: "Are all follow-up paragraphs appropriate length — no overly long blocks?",
     idealAnswer: "Yes",
   },
   {
-    id: "FUP-12",
+    id: "FUP-08",
     layer: 2,
     target: "followup",
-    question: "Are both follow-up bullets fresh data points not used in the initial pitch?",
+    question: "Does the follow-up mention page count or page numbers?",
+    idealAnswer: "No",
+  },
+  {
+    id: "FUP-11",
+    layer: 2,
+    target: "followup",
+    question: "Does the follow-up open by restating a specific finding or city from the initial pitch?",
     idealAnswer: "Yes",
   },
 ];
