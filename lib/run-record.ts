@@ -1,13 +1,9 @@
 import { GeneratedEmail, RunRecord, SessionTokenSummary } from "./types";
 
-// Assembles a RunRecord from session state. Called from page.tsx after
-// generation + QC complete (wiring is a later change — this PR is the data
-// foundation only).
-//
-// Note: this codebase stores quality results on each GeneratedEmail
-// (`email.quality.verdict`), not in a separate Map, so the params reflect that.
+// Assembles a RunRecord from session state. This codebase stores quality on
+// each GeneratedEmail (`email.quality`), so params reflect that.
 export function buildRunRecord(params: {
-  id?: string; // stable session run id so post-generation + post-QC saves update the same record
+  id?: string;
   user_name: string;
   campaign_name: string;
   total_journalists: number;
@@ -16,6 +12,10 @@ export function buildRunRecord(params: {
   token_summary: SessionTokenSummary;
   generation_duration_ms?: number;
   qc_duration_ms?: number;
+  generation_prompt?: string;
+  data_facts_summary?: string;
+  model?: string;
+  sample_method?: string;
 }): RunRecord {
   const {
     id,
@@ -27,30 +27,42 @@ export function buildRunRecord(params: {
     token_summary,
     generation_duration_ms = 0,
     qc_duration_ms = 0,
+    generation_prompt = "",
+    data_facts_summary = "",
+    model = "gemini-2.5-flash",
+    sample_method,
   } = params;
 
   const succeeded = generated_emails.filter((e) => e.status === "generated").length;
   const failed = generated_emails.filter((e) => e.status === "generation_failed").length;
   const total_batches = batch_size > 0 ? Math.ceil(total_journalists / batch_size) : 0;
 
-  const generatedCount = succeeded; // successfully generated emails
-  const evaluated = generated_emails.filter((e) => e.quality);
-  const was_sampled = evaluated.length < generatedCount;
-  const not_evaluated = Math.max(0, generatedCount - evaluated.length);
-  const qc_passed = evaluated.filter((e) => e.quality!.verdict === "PASS").length;
-  const qc_failed = evaluated.filter((e) => e.quality!.verdict === "FAIL").length;
-  const total_evaluated = qc_passed + qc_failed;
-  const pass_rate =
-    total_evaluated > 0 ? Math.round((qc_passed / total_evaluated) * 100) : 0;
+  const evaluatedEmails = generated_emails.filter((e) => e.quality);
+  const total_evaluated = evaluatedEmails.length;
+  const qc_passed = evaluatedEmails.filter((e) => e.quality!.verdict === "PASS").length;
+  const qc_failed = total_evaluated - qc_passed;
+  const pass_rate = total_evaluated > 0 ? Math.round((qc_passed / total_evaluated) * 100) : 0;
+  const was_sampled = total_evaluated < succeeded;
+  const not_evaluated = Math.max(0, succeeded - total_evaluated);
+  const l2_skipped_count = evaluatedEmails.filter((e) => e.quality!.layer2Skipped).length;
 
-  const l1Scores = evaluated.map((e) => e.quality!.layer1_score);
+  const l1Scores = evaluatedEmails.map((e) => e.quality!.layer1_score);
   const avg_l1_score =
     l1Scores.length > 0 ? Math.round(l1Scores.reduce((a, b) => a + b, 0) / l1Scores.length) : 0;
-  const l2Scores = evaluated
+  const l2Scores = evaluatedEmails
     .filter((e) => !e.quality!.layer2Skipped && e.quality!.layer2_score >= 0)
     .map((e) => e.quality!.layer2_score);
   const avg_l2_score =
     l2Scores.length > 0 ? Math.round(l2Scores.reduce((a, b) => a + b, 0) / l2Scores.length) : -1;
+
+  // Count failed check ids across all evaluated emails.
+  const failed_check_frequency: Record<string, number> = {};
+  for (const e of evaluatedEmails) {
+    const q = e.quality!;
+    for (const c of [...q.layer1, ...q.layer2]) {
+      if (!c.pass) failed_check_frequency[c.check_id] = (failed_check_frequency[c.check_id] ?? 0) + 1;
+    }
+  }
 
   const gen = token_summary.breakdown.email_generation;
   const qc = token_summary.breakdown.quality_check;
@@ -60,6 +72,13 @@ export function buildRunRecord(params: {
     created_at: new Date().toISOString(),
     user_name,
     campaign_name,
+    config: {
+      batch_size,
+      model,
+      generation_prompt_length: generation_prompt.length,
+      data_facts_length: data_facts_summary.length,
+    },
+    failed_check_frequency,
     generation: {
       total_journalists,
       batch_size,
@@ -73,11 +92,16 @@ export function buildRunRecord(params: {
     },
     evaluation: {
       total_evaluated,
+      evaluated: total_evaluated,
+      total_journalists,
+      sample_size: total_evaluated,
+      sample_method: sample_method ?? (was_sampled ? "random" : "all"),
       passed: qc_passed,
       failed: qc_failed,
       pass_rate,
       avg_l1_score,
       avg_l2_score,
+      l2_skipped_count,
       was_sampled,
       not_evaluated,
       input_tokens: qc.input_tokens,

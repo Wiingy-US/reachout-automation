@@ -115,6 +115,17 @@ export interface RunRecord {
   user_name: string; // entered by user at session start
   campaign_name: string; // selected or created by user
 
+  // Run configuration (optional — older records lack it)
+  config?: {
+    batch_size: number;
+    model: string;
+    generation_prompt_length: number;
+    data_facts_length: number;
+  };
+
+  // Per-run failed check counts, e.g. { "MAIN-31": 4 } (optional on old records)
+  failed_check_frequency?: Record<string, number>;
+
   // Generation stats
   generation: {
     total_journalists: number; // total in CSV
@@ -131,11 +142,16 @@ export interface RunRecord {
   // Evaluation stats
   evaluation: {
     total_evaluated: number; // rows that went through QC
+    evaluated?: number; // NEW alias of total_evaluated
+    total_journalists?: number; // NEW
+    sample_size?: number; // NEW (= evaluated)
+    sample_method?: string; // NEW ('random' | 'all')
     passed: number;
     failed: number;
     pass_rate: number; // 0-100
     avg_l1_score?: number; // 0-100 (optional — runs before weighted scoring lack it)
     avg_l2_score?: number; // 0-100, -1 if all skipped
+    l2_skipped_count?: number; // NEW (failed L1 gate)
     was_sampled?: boolean; // true when only a subset was evaluated
     not_evaluated?: number; // generated emails not included in the sample
     input_tokens: number;
