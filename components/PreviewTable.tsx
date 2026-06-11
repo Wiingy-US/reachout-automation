@@ -9,15 +9,29 @@ function truncate(s: string, n: number) {
 }
 
 function HtmlPreview({ html, title }: { html: string; title: string }) {
+  // Wrap the email HTML in a minimal white-background document so it renders
+  // like a real email client regardless of the app's light/dark mode.
+  const doc = `<html><head><style>
+    body { margin: 16px; padding: 0; background: #ffffff; color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      font-size: 14px; line-height: 1.6; }
+    p { margin: 0 0 12px 0; }
+    ul { margin: 0 0 12px 0; padding-left: 20px; }
+    li { margin-bottom: 6px; }
+  </style></head><body>${html || "<em>empty</em>"}</body></html>`;
   return (
     <div>
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">{title}</div>
-      <iframe
-        title={title}
-        sandbox=""
-        srcDoc={html || "<em>empty</em>"}
-        className="h-48 w-full rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface"
-      />
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-light-text2 dark:text-dark-text2">
+        {title}
+      </div>
+      <div className="overflow-hidden rounded-lg border border-light-border bg-white dark:border-dark-border">
+        <iframe
+          title={title}
+          sandbox="allow-same-origin"
+          srcDoc={doc}
+          style={{ width: "100%", height: "380px", border: "none", background: "#ffffff" }}
+        />
+      </div>
     </div>
   );
 }
@@ -26,15 +40,35 @@ function CheckRow({ check }: { check: CheckResult }) {
   return (
     <div
       className={`flex items-start gap-2 rounded px-2 py-1 text-xs ${
-        check.pass ? "" : "bg-danger-light dark:bg-danger/10"
+        check.pass
+          ? "dark:bg-dark-surface2"
+          : "bg-danger-light dark:border-l-2 dark:border-danger dark:bg-[#2D1515]"
       }`}
     >
-      <span className={check.pass ? "text-success" : "text-danger"}>
+      <span className={check.pass ? "text-success" : "text-danger dark:text-red-400"}>
         {check.pass ? "✓" : "✕"}
       </span>
-      <span className="w-20 shrink-0 font-mono font-semibold text-light-text2 dark:text-dark-text2">{check.check_id}</span>
-      <span className="flex-1 text-light-text2 dark:text-dark-text2">{check.question}</span>
-      <span className={`w-44 shrink-0 text-right ${check.pass ? "text-light-text2 dark:text-dark-text2" : "font-medium text-danger-text"}`}>
+      <span
+        className={`w-20 shrink-0 font-mono font-semibold ${
+          check.pass ? "text-light-text2 dark:text-brand" : "text-danger-text dark:text-red-400"
+        }`}
+      >
+        {check.check_id}
+      </span>
+      <span
+        className={`flex-1 ${
+          check.pass ? "text-light-text2 dark:text-dark-text2" : "text-light-text2 dark:text-red-300"
+        }`}
+      >
+        {check.question}
+      </span>
+      <span
+        className={`w-44 shrink-0 text-right ${
+          check.pass
+            ? "text-light-text2 dark:text-dark-text"
+            : "font-medium text-danger-text dark:text-red-200"
+        }`}
+      >
         {check.model_answer}
       </span>
     </div>
@@ -86,10 +120,12 @@ function Drawer({ email }: { email: GeneratedEmail }) {
   return (
     <div className="space-y-4">
       <div>
-        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-light-text2 dark:text-dark-text2">
+        <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-light-text2 dark:text-dark-text2">
           Verification Summary
         </div>
-        <p className="text-sm text-light-text dark:text-dark-text2">{email.verification_summary || "—"}</p>
+        <p className="rounded-lg bg-light-surface px-4 py-3 text-sm text-light-text dark:bg-dark-surface3 dark:text-dark-text">
+          {email.verification_summary || "—"}
+        </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <HtmlPreview html={email.email_1_html} title="Email 1" />
@@ -106,7 +142,7 @@ function Drawer({ email }: { email: GeneratedEmail }) {
           </div>
           <ChecklistSection title="Layer 1 — Deterministic" checks={email.quality.layer1} />
           {email.quality.layer2Skipped ? (
-            <div className="rounded bg-light-bg dark:bg-dark-surface2 px-2 py-1 text-xs italic text-light-text2 dark:text-dark-text2">
+            <div className="rounded bg-light-bg px-3 py-2 text-xs italic text-light-text2 dark:bg-dark-surface3 dark:text-dark-text3">
               LLM judge skipped (Layer 1 failed)
             </div>
           ) : (
@@ -170,7 +206,7 @@ export function PreviewTable({
                 <Fragment key={e.rowIndex}>
                   <tr
                     onClick={() => toggle(e.rowIndex)}
-                    className="cursor-pointer hover:bg-light-surface2 dark:hover:bg-[#252848]"
+                    className="cursor-pointer hover:bg-light-surface2 dark:hover:bg-dark-surface3"
                   >
                     <td className="px-3 py-2 text-light-text3 dark:text-dark-text3">{i + 1}</td>
                     <td className="px-3 py-2">
@@ -206,7 +242,10 @@ export function PreviewTable({
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={qualityRun ? 6 : 5} className="bg-light-surface2 dark:bg-dark-surface2 px-5 py-4">
+                      <td
+                        colSpan={qualityRun ? 6 : 5}
+                        className="border-l-[3px] border-brand bg-light-surface2 px-5 py-4 dark:bg-dark-surface2"
+                      >
                         <Drawer email={e} />
                       </td>
                     </tr>
