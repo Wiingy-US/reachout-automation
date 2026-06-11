@@ -40,6 +40,15 @@ export function buildRunRecord(params: {
   const pass_rate =
     total_evaluated > 0 ? Math.round((qc_passed / total_evaluated) * 100) : 0;
 
+  const l1Scores = evaluated.map((e) => e.quality!.layer1_score);
+  const avg_l1_score =
+    l1Scores.length > 0 ? Math.round(l1Scores.reduce((a, b) => a + b, 0) / l1Scores.length) : 0;
+  const l2Scores = evaluated
+    .filter((e) => !e.quality!.layer2Skipped && e.quality!.layer2_score >= 0)
+    .map((e) => e.quality!.layer2_score);
+  const avg_l2_score =
+    l2Scores.length > 0 ? Math.round(l2Scores.reduce((a, b) => a + b, 0) / l2Scores.length) : -1;
+
   const gen = token_summary.breakdown.email_generation;
   const qc = token_summary.breakdown.quality_check;
 
@@ -64,6 +73,8 @@ export function buildRunRecord(params: {
       passed: qc_passed,
       failed: qc_failed,
       pass_rate,
+      avg_l1_score,
+      avg_l2_score,
       input_tokens: qc.input_tokens,
       output_tokens: qc.output_tokens,
       total_tokens: qc.total_tokens,

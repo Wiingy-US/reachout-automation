@@ -3,7 +3,7 @@ import { runDeterministicChecks } from "@/lib/deterministicChecks";
 import { runLayer2JudgeBatch } from "@/lib/gemini";
 import { assembleVerdict, normaliseJudgeChecks } from "@/lib/quality";
 import { toTokenRecord } from "@/lib/costs";
-import { LAYER2_CHECKS } from "@/lib/rubric";
+import { LAYER2_CHECKS, SCORING, calculateLayerScore } from "@/lib/rubric";
 import { CheckResult, GeneratedEmail } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,6 +21,9 @@ function allLayer2Failed(message: string): CheckResult[] {
     question: c.question,
     model_answer: message,
     pass: false,
+    layer: 2 as const,
+    tier: c.tier,
+    weight: c.weight,
   }));
 }
 
@@ -37,17 +40,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "emails array is required" }, { status: 400 });
   }
 
-  // Layer 1 — deterministic, per email. Layer 2 (LLM judge) only runs on the
-  // emails that fully pass Layer 1, and is batched into a single Gemini call.
+  // Layer 1 — deterministic, per email. Layer 2 only runs on emails whose L1
+  // weighted score reaches the gate; the judge is batched into one call.
   const layer1ByRow = new Map<number, CheckResult[]>();
   const l1Passers: GeneratedEmail[] = [];
   for (const email of emails) {
     const layer1 = runDeterministicChecks(email);
     layer1ByRow.set(email.rowIndex, layer1);
-    if (layer1.every((c) => c.pass)) l1Passers.push(email);
+    if (calculateLayerScore(layer1) >= SCORING.l1_gate_threshold) l1Passers.push(email);
   }
 
-  // Run the batched judge over the L1 passers.
   const judgeByEmail = new Map<string, CheckResult[]>();
   let judgeError: string | null = null;
   const token_records = [];
@@ -87,11 +89,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Assemble per-email verdicts.
+  // Assemble per-email scored verdicts.
   const results = emails.map((email) => {
     const layer1 = layer1ByRow.get(email.rowIndex)!;
-    const l1Pass = layer1.every((c) => c.pass);
-    const layer2 = l1Pass ? judgeByEmail.get(email.journalist.email) ?? null : null;
+    const passedGate = calculateLayerScore(layer1) >= SCORING.l1_gate_threshold;
+    const layer2 = passedGate ? judgeByEmail.get(email.journalist.email) ?? null : null;
     return {
       rowIndex: email.rowIndex,
       journalist_email: email.journalist.email,

@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { CheckResult, GeneratedEmail } from "@/lib/types";
-import { Badge } from "./ui";
+import { getCheck, SCORING } from "@/lib/rubric";
+import { Badge, ScorePill, TierBadge } from "./ui";
 
 function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
@@ -63,7 +64,7 @@ function CheckRow({ check }: { check: CheckResult }) {
         {check.question}
       </span>
       <span
-        className={`w-44 shrink-0 text-right ${
+        className={`flex-1 text-right ${
           check.pass
             ? "text-light-text2 dark:text-dark-text"
             : "font-medium text-danger-text dark:text-red-200"
@@ -71,6 +72,12 @@ function CheckRow({ check }: { check: CheckResult }) {
       >
         {check.model_answer}
       </span>
+      <TierBadge tier={check.tier ?? getCheck(check.check_id)?.tier ?? "minor"} />
+      {!check.pass && (
+        <span className="w-12 shrink-0 text-right font-semibold text-danger dark:text-red-400">
+          -{check.weight ?? getCheck(check.check_id)?.weight ?? SCORING.minor_deduction}pts
+        </span>
+      )}
     </div>
   );
 }
@@ -134,16 +141,23 @@ function Drawer({ email }: { email: GeneratedEmail }) {
 
       {email.quality && (
         <div className="space-y-3 rounded-lg border border-light-border dark:border-dark-border bg-light-surface2 dark:bg-dark-surface2 p-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-light-text dark:text-dark-text2">Quality Check</span>
+          {/* Score header */}
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-light-surface px-3 py-2 dark:bg-dark-surface3">
+            <ScorePill label="L1 Score" score={email.quality.layer1_score} />
+            <ScorePill label="L2 Score" score={email.quality.layer2_score} />
+            <span className="text-xs text-light-text2 dark:text-dark-text2">
+              Gate: {email.quality.layer1_passed_gate ? "✓ passed" : "✕ failed"}
+            </span>
             <Badge tone={email.quality.verdict === "PASS" ? "pass" : "fail"}>
               {email.quality.verdict}
             </Badge>
           </div>
+
           <ChecklistSection title="Layer 1 — Deterministic" checks={email.quality.layer1} />
           {email.quality.layer2Skipped ? (
-            <div className="rounded bg-light-bg px-3 py-2 text-xs italic text-light-text2 dark:bg-dark-surface3 dark:text-dark-text3">
-              LLM judge skipped (Layer 1 failed)
+            <div className="rounded bg-light-bg px-3 py-2 text-xs text-warning-text dark:bg-dark-surface3 dark:text-[#FCD34D]">
+              Layer 2 skipped — L1 score ({email.quality.layer1_score}) below gate ({SCORING.l1_gate_threshold}). Fix
+              structural issues first to unlock quality evaluation.
             </div>
           ) : (
             <ChecklistSection title="Layer 2 — LLM Judge" checks={email.quality.layer2} />
@@ -221,9 +235,13 @@ export function PreviewTable({
                     {qualityRun && (
                       <td className="px-3 py-2">
                         {e.quality ? (
-                          <Badge tone={e.quality.verdict === "PASS" ? "pass" : "fail"}>
-                            {e.quality.verdict}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <ScorePill label="L1" score={e.quality.layer1_score} />
+                            <ScorePill label="L2" score={e.quality.layer2_score} />
+                            <Badge tone={e.quality.verdict === "PASS" ? "pass" : "fail"}>
+                              {e.quality.verdict}
+                            </Badge>
+                          </div>
                         ) : (
                           <span className="text-xs text-light-text3 dark:text-dark-text3">—</span>
                         )}

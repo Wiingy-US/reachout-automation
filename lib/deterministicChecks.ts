@@ -2,7 +2,7 @@
 // first; if anything fails the email is FAIL and the LLM judge is skipped.
 
 import { CheckResult, GeneratedEmail } from "./types";
-import { LAYER1_CHECKS, RUBRIC_CONFIG } from "./rubric";
+import { LAYER1_CHECKS, RUBRIC_CONFIG, getCheck } from "./rubric";
 import { decodeEntities, hasEmDash, mentionsPdf, stripHtml, wordCount } from "./htmlUtils";
 
 const FORBIDDEN_TAGS = ["<!doctype", "<html", "<head", "<body", "<style", "<title", "<meta"];
@@ -31,7 +31,16 @@ function result(
   pass: boolean,
   modelAnswer: string
 ): CheckResult {
-  return { check_id, question, pass, model_answer: modelAnswer };
+  const rc = getCheck(check_id);
+  return {
+    check_id,
+    question,
+    pass,
+    model_answer: modelAnswer,
+    layer: 1,
+    tier: rc?.tier ?? "minor",
+    weight: rc?.weight ?? 5,
+  };
 }
 
 /** Normalise a string for loose matching (lowercase, strip punctuation). */

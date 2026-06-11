@@ -12,12 +12,13 @@ function Card({ label, value, tone }: { label: string; value: string; tone?: str
 }
 
 export function SummaryBar({ summary }: { summary: QualitySummary | null }) {
+  const l2 = summary && summary.avgL2Score >= 0 ? String(summary.avgL2Score) : "—";
   return (
     <div className="flex gap-3">
       <Card label="Evaluated" value={summary ? String(summary.evaluated) : "—"} />
       <Card label="Pass" value={summary ? String(summary.pass) : "—"} tone="text-success" />
-      <Card label="Fail" value={summary ? String(summary.fail) : "—"} tone="text-danger" />
-      <Card label="Pass rate" value={summary ? `${summary.passRate}%` : "—"} />
+      <Card label="Avg L1 Score" value={summary ? String(summary.avgL1Score) : "—"} />
+      <Card label="Avg L2 Score" value={l2} />
     </div>
   );
 }

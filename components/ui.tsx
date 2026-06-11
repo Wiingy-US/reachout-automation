@@ -1,6 +1,37 @@
 "use client";
 
 import { ReactNode } from "react";
+import { scoreBand } from "@/lib/rubric";
+import type { Tier } from "@/lib/types";
+
+export function ScorePill({ label, score }: { label?: string; score: number }) {
+  const band = scoreBand(score);
+  const cls = {
+    green: "bg-success-light text-success-text dark:bg-[#14532D] dark:text-[#86EFAC]",
+    amber: "bg-warning-light text-warning-text dark:bg-[#78350F] dark:text-[#FCD34D]",
+    red: "bg-danger-light text-danger-text dark:bg-[#7F1D1D] dark:text-[#FCA5A5]",
+    skipped: "bg-light-bg text-light-text3 dark:bg-dark-surface3 dark:text-dark-text3",
+  }[band];
+  const text = score < 0 ? "—" : String(score);
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>
+      {label ? `${label}: ${text}` : text}
+    </span>
+  );
+}
+
+export function TierBadge({ tier }: { tier: Tier }) {
+  const cls = {
+    critical: "bg-danger-light text-danger-text dark:bg-[#7F1D1D] dark:text-[#FCA5A5]",
+    major: "bg-warning-light text-warning-text dark:bg-[#78350F] dark:text-[#FCD34D]",
+    minor: "bg-light-bg text-light-text3 dark:bg-dark-surface3 dark:text-dark-text3",
+  }[tier];
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${cls}`}>
+      {tier}
+    </span>
+  );
+}
 
 export function Section({
   step,
