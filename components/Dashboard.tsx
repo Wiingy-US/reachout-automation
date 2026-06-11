@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RunRecord, CampaignRecord, UserRecord } from "@/lib/types";
 import { formatTokens, formatCostTable } from "@/lib/costs";
+import { formatDuration } from "@/lib/utils";
 
 function fmtDateTime(iso: string): string {
   const d = new Date(iso);
@@ -19,7 +20,7 @@ function passRateBadgeClass(p: number): string {
 
 type SortKey =
   | "created_at" | "user_name" | "campaign_name" | "journalists" | "batches"
-  | "generated" | "evaluated" | "pass_rate" | "gen_tokens" | "gen_cost"
+  | "generated" | "evaluated" | "duration" | "pass_rate" | "gen_tokens" | "gen_cost"
   | "qc_tokens" | "qc_cost" | "total_cost";
 
 const ACCESSORS: Record<SortKey, (r: RunRecord) => number | string> = {
@@ -30,6 +31,7 @@ const ACCESSORS: Record<SortKey, (r: RunRecord) => number | string> = {
   batches: (r) => r.generation.total_batches,
   generated: (r) => r.generation.succeeded,
   evaluated: (r) => r.evaluation.total_evaluated,
+  duration: (r) => r.duration?.total_ms ?? 0,
   pass_rate: (r) => r.evaluation.pass_rate,
   gen_tokens: (r) => r.generation.total_tokens,
   gen_cost: (r) => r.generation.cost_usd,
@@ -46,6 +48,7 @@ const COLUMNS: { key: SortKey; label: string; hideMobile: boolean }[] = [
   { key: "batches", label: "Batches", hideMobile: true },
   { key: "generated", label: "Generated", hideMobile: true },
   { key: "evaluated", label: "Evaluated", hideMobile: true },
+  { key: "duration", label: "Duration", hideMobile: true },
   { key: "pass_rate", label: "Pass Rate", hideMobile: false },
   { key: "gen_tokens", label: "Gen Tokens", hideMobile: true },
   { key: "gen_cost", label: "Gen Cost", hideMobile: true },
@@ -275,6 +278,21 @@ export function Dashboard() {
                         {r.generation.failed > 0 && <span className="text-danger"> ({r.generation.failed} failed)</span>}
                       </td>
                       <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{evaluated}</td>
+                      <td className="hidden whitespace-nowrap px-3 py-2 md:table-cell">
+                        {r.duration?.total_ms ? (
+                          <>
+                            <div className="text-light-text dark:text-dark-text">
+                              {formatDuration(r.duration.total_ms)}
+                            </div>
+                            <div className="text-[11px] text-light-text3 dark:text-dark-text3">
+                              Gen: {formatDuration(r.duration.generation_ms)} · QC:{" "}
+                              {formatDuration(r.duration.evaluation_ms)}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-light-text3 dark:text-dark-text3">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         {evaluated === 0 ? (
                           <span className="text-light-text3 dark:text-dark-text3">—</span>
