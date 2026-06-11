@@ -30,15 +30,16 @@ const config: Config = {
           text2: "#6B7280",
           text3: "#9CA3AF",
         },
-        // ── Dark mode surfaces (higher-contrast v2) ─────────
+        // ── Dark mode surfaces (Claude-style neutral charcoal) ──
         dark: {
-          bg: "#0D0F1A",
-          surface: "#161829",
-          surface2: "#1E2038",
-          border: "#353860",
-          text: "#F0F2FF",
-          text2: "#B8BCDA",
-          text3: "#7880A8",
+          bg: "#111111",
+          surface: "#1A1A1A",
+          surface2: "#222222",
+          surface3: "#2A2A2A",
+          border: "#333333",
+          text: "#ECECEC",
+          text2: "#AAAAAA",
+          text3: "#666666",
         },
         // ── Semantic ────────────────────────────────────────
         success: { DEFAULT: "#22C55E", light: "#F0FDF4", text: "#15803D" },

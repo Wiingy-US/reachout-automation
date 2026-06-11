@@ -175,7 +175,7 @@ export function Sidebar({
           onClick={() => onTabChange("dashboard")}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 ${
             activeTab === "dashboard"
-              ? "bg-brand-light text-brand dark:bg-brand/10"
+              ? "bg-brand-light text-brand dark:bg-dark-surface3 dark:text-brand"
               : "text-light-text2 hover:bg-light-surface2 dark:text-dark-text2 dark:hover:bg-dark-surface2"
           } ${isCollapsed ? "justify-center" : ""}`}
           title="Dashboard"

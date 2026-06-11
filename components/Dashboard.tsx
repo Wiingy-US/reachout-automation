@@ -263,7 +263,7 @@ export function Dashboard() {
                   return (
                     <tr
                       key={r.id}
-                      className="dark:even:bg-dark-surface2 hover:bg-light-surface2 dark:hover:bg-[#252848]"
+                      className="dark:even:bg-dark-surface2 hover:bg-light-surface2 dark:hover:bg-dark-surface3"
                     >
                       <td className="whitespace-nowrap px-3 py-2 text-light-text2 dark:text-dark-text2">{fmtDateTime(r.created_at)}</td>
                       <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{r.user_name}</td>
