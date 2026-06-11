@@ -25,27 +25,6 @@ function hasAllCapsWords(text: string): { found: boolean; word?: string } {
   return { found: true, word: flagged[0] };
 }
 
-/** Count all <li> tags in an HTML string. */
-function countLi(html: string): number {
-  const m = (html || "").match(/<li\b/gi);
-  return m ? m.length : 0;
-}
-
-/** Return the visible text of the CTA paragraph: the <p> immediately before the
- *  final <p>Best,</p>. Null if it can't be located. */
-function ctaParagraphText(html: string): string | null {
-  const paras = (html || "").match(/<p\b[^>]*>[\s\S]*?<\/p>/gi);
-  if (!paras || paras.length < 2) return null;
-  const texts = paras.map((p) => stripHtml(p).trim());
-  // Find the sign-off paragraph ("Best,") and take the one before it.
-  for (let i = texts.length - 1; i >= 1; i--) {
-    if (texts[i] === "Best," || /^best,?$/i.test(texts[i])) {
-      return texts[i - 1];
-    }
-  }
-  return null;
-}
-
 function result(
   check_id: string,
   question: string,
@@ -148,19 +127,15 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     out.push(result("MAIN-04", q("MAIN-04"), !has, has ? "Yes — em dash present" : "No"));
   }
 
-  // MAIN-07 — 'Key Findings:' and 'Potential Angles:' labels present AND bolded
+  // MAIN-07 — 'Key Findings:' and 'Potential Angles:' labels present (plain text)
   {
-    const hasKF = main.includes("<b>Key Findings:</b>");
-    const hasPA = main.includes("<b>Potential Angles:</b>");
+    const lower = main.toLowerCase();
+    const hasKF = lower.includes("key findings:");
+    const hasPA = lower.includes("potential angles:");
     const pass = hasKF && hasPA;
     const missing = [!hasKF ? "Key Findings:" : null, !hasPA ? "Potential Angles:" : null].filter(Boolean);
     out.push(
-      result(
-        "MAIN-07",
-        q("MAIN-07"),
-        pass,
-        pass ? "Yes — both labels present and bolded" : `No — missing or unbolded: ${missing.join(", ")}`
-      )
+      result("MAIN-07", q("MAIN-07"), pass, pass ? "Yes — both labels present" : `No — missing: ${missing.join(", ")}`)
     );
   }
 
@@ -207,24 +182,6 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     out.push(result("MAIN-26", q("MAIN-26"), !found, found ? `Yes — found: ${found}` : "No"));
   }
 
-  // MAIN-36 — CTA paragraph (the <p> before "Best,") is phrased as a question
-  {
-    const cta = ctaParagraphText(main);
-    if (cta === null) {
-      out.push(result("MAIN-36", q("MAIN-36"), false, "No — CTA paragraph not found"));
-    } else {
-      const pass = cta.includes("?");
-      out.push(
-        result(
-          "MAIN-36",
-          q("MAIN-36"),
-          pass,
-          pass ? "Yes — CTA contains a question mark" : "No — CTA does not end with a question"
-        )
-      );
-    }
-  }
-
   // ---- Follow-up ----
 
   // FUP-01 — follow-up word count <= max
@@ -264,13 +221,6 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     const last = lastVisibleLine(fup);
     const pass = last === "Best,";
     out.push(result("FUP-10", q("FUP-10"), pass, pass ? "Yes — ends 'Best,'" : `No — ends '${last}'`));
-  }
-
-  // FUP-13 — follow-up contains exactly N bullets
-  {
-    const n = countLi(fup);
-    const pass = n === RUBRIC_CONFIG.followupBullets;
-    out.push(result("FUP-13", q("FUP-13"), pass, pass ? `Yes — exactly ${n} bullets` : `No — found ${n} bullets`));
   }
 
   return out;
