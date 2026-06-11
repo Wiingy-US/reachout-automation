@@ -282,7 +282,12 @@ export function Dashboard() {
                         <span className="text-light-text3 dark:text-dark-text3"> / {r.generation.succeeded + r.generation.failed}</span>
                         {r.generation.failed > 0 && <span className="text-danger"> ({r.generation.failed} failed)</span>}
                       </td>
-                      <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{evaluated}</td>
+                      <td className="hidden whitespace-nowrap px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">
+                        {evaluated} / {r.generation.total_journalists}
+                        {r.evaluation.was_sampled && (
+                          <span className="text-light-text3 dark:text-dark-text3"> (sample)</span>
+                        )}
+                      </td>
                       <td className="hidden whitespace-nowrap px-3 py-2 md:table-cell">
                         {r.duration?.total_ms ? (
                           <>

@@ -10,6 +10,8 @@ import {
 import { summarise } from "@/lib/quality";
 import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
 import { formatDuration } from "@/lib/utils";
+import { randomSample } from "@/lib/sampling";
+import { QCSampleSelector } from "@/components/QCSampleSelector";
 import { buildExportCsv, downloadCsv, validateExportHtml } from "@/lib/exportCsv";
 import { buildRunRecord } from "@/lib/run-record";
 import { Button, Section, Spinner } from "@/components/ui";
@@ -92,6 +94,16 @@ export default function Home() {
   const [qcProgress, setQcProgress] = useState({ done: 0, total: 0 });
   const [qualityRun, setQualityRun] = useState(false);
   const [qualityVersion, setQualityVersion] = useState(0);
+  const [wasSampled, setWasSampled] = useState(false);
+
+  // Re-run evaluation: clear all QC results and show the selector again.
+  function resetQualityCheck() {
+    setEmails((prev) => prev.map((e) => ({ ...e, quality: undefined })));
+    setQualityRun(false);
+    setQualityVersion(0);
+    setWasSampled(false);
+    setTokenRecords((prev) => prev.filter((r) => r.operation !== "quality_check_layer2"));
+  }
 
   // Token usage accumulated across the session.
   const [tokenRecords, setTokenRecords] = useState<OperationTokenRecord[]>([]);
@@ -390,10 +402,13 @@ export default function Home() {
   }
 
   // ---- Step 4: quality check ----
-  async function handleQualityCheck() {
-    // Only evaluate rows that don't already have a result — this preserves
-    // passing rows across a retry and avoids re-spending tokens on them.
-    const targets = generatedOk.filter((e) => !e.quality);
+  async function handleQualityCheck(sampleParam: number | "all" = "all") {
+    // Choose the emails to evaluate: all generated, or a random sample. Skip
+    // any that already have a result (preserves prior runs / retries).
+    const pool =
+      sampleParam === "all" ? generatedOk : randomSample(emails, sampleParam);
+    const targets = pool.filter((e) => !e.quality);
+    setWasSampled(sampleParam !== "all");
     qcStartTime.current = Date.now();
     setQcRunning(true);
     setQcProgress({ done: 0, total: targets.length });
@@ -687,23 +702,37 @@ export default function Home() {
             title="Step 4 — Review, quality check & export"
             subtitle="Expand any row to inspect the email. Run the quality check, then download the CSV."
           >
+            {/* Quality check: sample selector → summary after running */}
+            <div className="mb-4">
+              {qualityRun ? (
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="text-light-text dark:text-dark-text">
+                    Evaluated {summary?.evaluated ?? 0} of {generatedOk.length} emails (
+                    {summary?.passRate ?? 0}% pass rate)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={resetQualityCheck}
+                    disabled={generating || qcRunning || isRetrying}
+                    className="text-xs font-medium text-brand hover:underline disabled:opacity-40"
+                  >
+                    Re-run evaluation
+                  </button>
+                </div>
+              ) : generatedOk.length === 0 ? (
+                <span className="text-sm text-light-text2 dark:text-dark-text2">
+                  No successfully generated emails to evaluate.
+                </span>
+              ) : (
+                <QCSampleSelector
+                  totalGenerated={generatedOk.length}
+                  isRunning={qcRunning}
+                  onRun={handleQualityCheck}
+                />
+              )}
+            </div>
+
             <div className="mb-4 flex flex-wrap items-center gap-3">
-              <Button
-                onClick={handleQualityCheck}
-                disabled={
-                  qcRunning || generating || isRetrying || qualityRun || generatedOk.length === 0
-                }
-              >
-                {qcRunning ? (
-                  <>
-                    <Spinner /> Running quality check…
-                  </>
-                ) : qualityRun ? (
-                  "Quality check complete ✓"
-                ) : (
-                  "Run quality check"
-                )}
-              </Button>
 
               {failedCount > 0 && !isRetrying && (
                 <button
@@ -760,6 +789,12 @@ export default function Home() {
             {qualityRun && (
               <div className="mb-4">
                 <SummaryBar summary={summary} />
+                {wasSampled && summary && (
+                  <p className="mt-2 text-xs text-light-text3 dark:text-dark-text3">
+                    Showing results for {summary.evaluated} sampled emails.{" "}
+                    {Math.max(0, generatedOk.length - summary.evaluated)} emails not evaluated.
+                  </p>
+                )}
               </div>
             )}
 
