@@ -25,18 +25,25 @@ function hasAllCapsWords(text: string): { found: boolean; word?: string } {
   return { found: true, word: flagged[0] };
 }
 
-/** Extract each Potential Angles <li>'s text content (inner HTML stripped).
- *  Returns null if the section label is not present. */
-function potentialAnglesBullets(html: string): string[] | null {
-  const lower = html.toLowerCase();
-  const start = lower.indexOf("potential angles");
-  if (start === -1) return null;
-  const after = html.slice(start);
-  const endUl = after.toLowerCase().indexOf("</ul>");
-  const seg = endUl === -1 ? after : after.slice(0, endUl);
-  const lis = seg.match(/<li\b[^>]*>[\s\S]*?<\/li>/gi);
-  if (!lis) return [];
-  return lis.map((li) => stripHtml(li).trim());
+/** Count all <li> tags in an HTML string. */
+function countLi(html: string): number {
+  const m = (html || "").match(/<li\b/gi);
+  return m ? m.length : 0;
+}
+
+/** Return the visible text of the CTA paragraph: the <p> immediately before the
+ *  final <p>Best,</p>. Null if it can't be located. */
+function ctaParagraphText(html: string): string | null {
+  const paras = (html || "").match(/<p\b[^>]*>[\s\S]*?<\/p>/gi);
+  if (!paras || paras.length < 2) return null;
+  const texts = paras.map((p) => stripHtml(p).trim());
+  // Find the sign-off paragraph ("Best,") and take the one before it.
+  for (let i = texts.length - 1; i >= 1; i--) {
+    if (texts[i] === "Best," || /^best,?$/i.test(texts[i])) {
+      return texts[i - 1];
+    }
+  }
+  return null;
 }
 
 function result(
@@ -141,14 +148,20 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     out.push(result("MAIN-04", q("MAIN-04"), !has, has ? "Yes — em dash present" : "No"));
   }
 
-  // MAIN-07 — 'Key Findings:' and 'Potential Angles:' labels present
+  // MAIN-07 — 'Key Findings:' and 'Potential Angles:' labels present AND bolded
   {
-    const body = stripHtml(main);
-    const hasKF = /key findings\s*:/i.test(body);
-    const hasPA = /potential angles\s*:/i.test(body);
+    const hasKF = main.includes("<b>Key Findings:</b>");
+    const hasPA = main.includes("<b>Potential Angles:</b>");
     const pass = hasKF && hasPA;
     const missing = [!hasKF ? "Key Findings:" : null, !hasPA ? "Potential Angles:" : null].filter(Boolean);
-    out.push(result("MAIN-07", q("MAIN-07"), pass, pass ? "Yes" : `No — missing ${missing.join(", ")}`));
+    out.push(
+      result(
+        "MAIN-07",
+        q("MAIN-07"),
+        pass,
+        pass ? "Yes — both labels present and bolded" : `No — missing or unbolded: ${missing.join(", ")}`
+      )
+    );
   }
 
   // MAIN-10 — literal "pdf"
@@ -194,41 +207,22 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     out.push(result("MAIN-26", q("MAIN-26"), !found, found ? `Yes — found: ${found}` : "No"));
   }
 
-  // MAIN-34 — each Potential Angles bullet: 2-5 word headline + colon + description
+  // MAIN-36 — CTA paragraph (the <p> before "Best,") is phrased as a question
   {
-    const bullets = potentialAnglesBullets(main);
-    let pass = true;
-    let answer = "";
-    if (bullets === null || bullets.length === 0) {
-      pass = false;
-      answer = "No — Potential Angles section not found";
+    const cta = ctaParagraphText(main);
+    if (cta === null) {
+      out.push(result("MAIN-36", q("MAIN-36"), false, "No — CTA paragraph not found"));
     } else {
-      for (let i = 0; i < bullets.length; i++) {
-        const text = bullets[i];
-        const ci = text.indexOf(":");
-        if (ci === -1) {
-          pass = false;
-          answer = `No — bullet ${i + 1} missing colon separator: '${text}'`;
-          break;
-        }
-        const headline = text.slice(0, ci).trim();
-        const desc = text.slice(ci + 1).trim();
-        const hw = headline ? headline.split(/\s+/).length : 0;
-        if (hw < 2 || hw > 5) {
-          pass = false;
-          answer = `No — bullet ${i + 1} headline is ${hw} words: '${headline}'`;
-          break;
-        }
-        const dw = desc ? desc.split(/\s+/).length : 0;
-        if (dw === 0 || dw >= 35) {
-          pass = false;
-          answer = `No — bullet ${i + 1} description is ${dw} words`;
-          break;
-        }
-      }
-      if (pass) answer = `Yes — all ${bullets.length} bullets correctly formatted`;
+      const pass = cta.includes("?");
+      out.push(
+        result(
+          "MAIN-36",
+          q("MAIN-36"),
+          pass,
+          pass ? "Yes — CTA contains a question mark" : "No — CTA does not end with a question"
+        )
+      );
     }
-    out.push(result("MAIN-34", q("MAIN-34"), pass, answer));
   }
 
   // ---- Follow-up ----
@@ -270,6 +264,13 @@ export function runDeterministicChecks(email: GeneratedEmail): CheckResult[] {
     const last = lastVisibleLine(fup);
     const pass = last === "Best,";
     out.push(result("FUP-10", q("FUP-10"), pass, pass ? "Yes — ends 'Best,'" : `No — ends '${last}'`));
+  }
+
+  // FUP-13 — follow-up contains exactly N bullets
+  {
+    const n = countLi(fup);
+    const pass = n === RUBRIC_CONFIG.followupBullets;
+    out.push(result("FUP-13", q("FUP-13"), pass, pass ? `Yes — exactly ${n} bullets` : `No — found ${n} bullets`));
   }
 
   return out;

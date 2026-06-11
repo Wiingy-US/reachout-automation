@@ -1,10 +1,10 @@
-// The quality rubric (v2). Counts are derived dynamically from this array
-// (LAYER1_CHECKS / LAYER2_CHECKS) — never hardcode them elsewhere.
+// Quality rubric v3. Counts are derived from this array (LAYER1_CHECKS /
+// LAYER2_CHECKS) — never hardcode them elsewhere.
 //
 // Layer 1 (deterministic) is evaluated server-side with pure string/regex/HTML
 // parsing — see lib/deterministicChecks.ts.
-// Layer 2 (LLM judge) is evaluated by Gemini — the judge prompt in lib/gemini.ts
-// builds its rubric block from LAYER2_CHECKS.
+// Layer 2 (LLM judge) is evaluated by Gemini in batches — see the batch judge
+// prompt in lib/gemini.ts.
 
 export const RUBRIC_CONFIG = {
   subjectMaxChars: 60,
@@ -13,6 +13,7 @@ export const RUBRIC_CONFIG = {
   introMaxSentences: 5,
   keyFindingsBullets: 3,
   potentialAnglesBullets: 2,
+  followupBullets: 2,
 };
 
 export type Layer = 1 | 2;
@@ -27,23 +28,21 @@ export interface RubricCheck {
 }
 
 export const RUBRIC: RubricCheck[] = [
-  // -------------------------------------------------------------------------
-  // LAYER 1 — DETERMINISTIC
-  // -------------------------------------------------------------------------
+  // ---- LAYER 1 — DETERMINISTIC (19) ----
 
   // Subject
   {
     id: "SUB-02",
     layer: 1,
     target: "subject",
-    question: `Is the subject line under ${RUBRIC_CONFIG.subjectMaxChars} characters?`,
+    question: "Is the subject line under 60 characters?",
     idealAnswer: "Yes",
   },
   {
     id: "SUB-03",
     layer: 1,
     target: "subject",
-    question: "Does the subject line contain ALL CAPS words?",
+    question: "Does the subject line contain ALL CAPS words (excluding whitelisted abbreviations)?",
     idealAnswer: "No",
   },
 
@@ -73,7 +72,7 @@ export const RUBRIC: RubricCheck[] = [
     id: "MAIN-07",
     layer: 1,
     target: "main",
-    question: "Does the email include both 'Key Findings:' and 'Potential Angles:' labels?",
+    question: "Are both 'Key Findings:' and 'Potential Angles:' labels present AND wrapped in <b> tags?",
     idealAnswer: "Yes",
   },
   {
@@ -87,21 +86,21 @@ export const RUBRIC: RubricCheck[] = [
     id: "MAIN-13",
     layer: 1,
     target: "main",
-    question: `Is the email body ${RUBRIC_CONFIG.mainMaxWords} words or fewer (HTML stripped)?`,
+    question: "Is the email body 210 words or fewer (HTML stripped)?",
     idealAnswer: "Yes",
   },
   {
     id: "MAIN-23",
     layer: 1,
     target: "main",
-    question: `Does the Key Findings section contain exactly ${RUBRIC_CONFIG.keyFindingsBullets} bullets?`,
+    question: "Does the Key Findings section contain exactly 3 bullets?",
     idealAnswer: "Yes",
   },
   {
     id: "MAIN-24",
     layer: 1,
     target: "main",
-    question: `Does the Potential Angles section contain exactly ${RUBRIC_CONFIG.potentialAnglesBullets} bullets?`,
+    question: "Does the Potential Angles section contain exactly 2 bullets?",
     idealAnswer: "Yes",
   },
   {
@@ -116,15 +115,14 @@ export const RUBRIC: RubricCheck[] = [
     layer: 1,
     target: "main",
     question:
-      "Does the email contain forbidden HTML tags (<html>, <head>, <body>, <style>, <title>, <meta>, <!DOCTYPE>)?",
+      "Does the email contain forbidden HTML tags (<html> <head> <body> <style> <title> <meta> <!DOCTYPE>)?",
     idealAnswer: "No",
   },
   {
-    id: "MAIN-34",
+    id: "MAIN-36",
     layer: 1,
     target: "main",
-    question:
-      "Does each Potential Angles bullet have a 3-4 word headline followed by a one-line description?",
+    question: "Does the CTA paragraph contain a question mark (CTA phrased as a question)?",
     idealAnswer: "Yes",
   },
 
@@ -133,7 +131,7 @@ export const RUBRIC: RubricCheck[] = [
     id: "FUP-01",
     layer: 1,
     target: "followup",
-    question: `Is the follow-up ${RUBRIC_CONFIG.followupMaxWords} words or fewer (HTML stripped)?`,
+    question: "Is the follow-up body 90 words or fewer (HTML stripped)?",
     idealAnswer: "Yes",
   },
   {
@@ -164,39 +162,29 @@ export const RUBRIC: RubricCheck[] = [
     question: "Does the follow-up sign-off end with exactly 'Best,' and nothing after it?",
     idealAnswer: "Yes",
   },
+  {
+    id: "FUP-13",
+    layer: 1,
+    target: "followup",
+    question: "Does the follow-up contain exactly 2 bullets?",
+    idealAnswer: "Yes",
+  },
 
-  // -------------------------------------------------------------------------
-  // LAYER 2 — LLM JUDGE
-  // -------------------------------------------------------------------------
+  // ---- LAYER 2 — LLM JUDGE (11) ----
 
   // Main email
   {
     id: "MAIN-01",
     layer: 2,
     target: "main",
-    question:
-      "Do all statistics match the permitted data facts — no hallucinated or altered numbers?",
+    question: "Do all statistics match the permitted data facts — no hallucinated or altered numbers?",
     idealAnswer: "Yes",
-  },
-  {
-    id: "MAIN-09",
-    layer: 2,
-    target: "main",
-    question: "Are all paragraphs appropriate length — no overly long blocks?",
-    idealAnswer: "Yes",
-  },
-  {
-    id: "MAIN-11",
-    layer: 2,
-    target: "main",
-    question: "Does the email mention a page count or page numbers from the report?",
-    idealAnswer: "No",
   },
   {
     id: "MAIN-12",
     layer: 2,
     target: "main",
-    question: `Is the introduction (before Key Findings) ${RUBRIC_CONFIG.introMaxSentences} sentences or fewer?`,
+    question: "Is the introduction (before Key Findings) 5 sentences or fewer?",
     idealAnswer: "Yes",
   },
   {
@@ -210,8 +198,7 @@ export const RUBRIC: RubricCheck[] = [
     id: "MAIN-30",
     layer: 2,
     target: "main",
-    question:
-      "Are the three Key Findings independent — no restatement of the same stat or cause-and-effect?",
+    question: "Are the three Key Findings independent — no restatement of the same stat or cause-effect?",
     idealAnswer: "Yes",
   },
   {
@@ -219,37 +206,53 @@ export const RUBRIC: RubricCheck[] = [
     layer: 2,
     target: "main",
     question:
-      "Does the opening hook reference only facts from the journalist's supplied bio — no invented work, employer, or beat?",
+      "Does the opening hook reference only facts from the journalist's supplied bio — no invented work or employer?",
     idealAnswer: "Yes",
   },
   {
     id: "MAIN-33",
     layer: 2,
     target: "main",
+    question: "Does the intro consist of exactly two paragraphs before Key Findings?",
+    idealAnswer: "Yes",
+  },
+  {
+    id: "MAIN-37",
+    layer: 2,
+    target: "main",
     question:
-      "Does the intro consist of exactly two paragraphs before Key Findings (hook paragraph + Wiingy/study paragraph)?",
+      "Does each Key Finding bullet contain a bolded stat-phrase (a number with its 1-3 word descriptor — not a number alone or city name alone)?",
     idealAnswer: "Yes",
   },
+  {
+    id: "MAIN-38",
+    layer: 2,
+    target: "main",
+    question: "Is the study title referenced verbatim using the exact EMAIL TITLE from the verified data?",
+    idealAnswer: "Yes",
+  },
+  {
+    id: "MAIN-39",
+    layer: 2,
+    target: "main",
+    question:
+      "If the journalist covers a city present in the verified data, does the lead Key Finding use that city's specific figures?",
+    idealAnswer: "Yes",
+  },
+
   // Follow-up
-  {
-    id: "FUP-06",
-    layer: 2,
-    target: "followup",
-    question: "Are all follow-up paragraphs appropriate length — no overly long blocks?",
-    idealAnswer: "Yes",
-  },
-  {
-    id: "FUP-08",
-    layer: 2,
-    target: "followup",
-    question: "Does the follow-up mention page count or page numbers?",
-    idealAnswer: "No",
-  },
   {
     id: "FUP-11",
     layer: 2,
     target: "followup",
-    question: "Does the follow-up open by restating a specific finding or city from the initial pitch?",
+    question: "Does the follow-up reconnect to a specific finding or topic from the initial pitch?",
+    idealAnswer: "Yes",
+  },
+  {
+    id: "FUP-12",
+    layer: 2,
+    target: "followup",
+    question: "Are both follow-up bullets fresh data points not used in the initial pitch?",
     idealAnswer: "Yes",
   },
 ];
