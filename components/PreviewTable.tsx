@@ -243,7 +243,12 @@ export function PreviewTable({
                             </Badge>
                           </div>
                         ) : (
-                          <span className="text-xs text-light-text3 dark:text-dark-text3">—</span>
+                          <span
+                            className="text-xs text-light-text3 dark:text-dark-text3"
+                            title="Not included in this evaluation sample"
+                          >
+                            —
+                          </span>
                         )}
                       </td>
                     )}

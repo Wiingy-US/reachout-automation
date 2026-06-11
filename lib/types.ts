@@ -136,6 +136,8 @@ export interface RunRecord {
     pass_rate: number; // 0-100
     avg_l1_score?: number; // 0-100 (optional — runs before weighted scoring lack it)
     avg_l2_score?: number; // 0-100, -1 if all skipped
+    was_sampled?: boolean; // true when only a subset was evaluated
+    not_evaluated?: number; // generated emails not included in the sample
     input_tokens: number;
     output_tokens: number;
     total_tokens: number;

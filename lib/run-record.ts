@@ -33,7 +33,10 @@ export function buildRunRecord(params: {
   const failed = generated_emails.filter((e) => e.status === "generation_failed").length;
   const total_batches = batch_size > 0 ? Math.ceil(total_journalists / batch_size) : 0;
 
+  const generatedCount = succeeded; // successfully generated emails
   const evaluated = generated_emails.filter((e) => e.quality);
+  const was_sampled = evaluated.length < generatedCount;
+  const not_evaluated = Math.max(0, generatedCount - evaluated.length);
   const qc_passed = evaluated.filter((e) => e.quality!.verdict === "PASS").length;
   const qc_failed = evaluated.filter((e) => e.quality!.verdict === "FAIL").length;
   const total_evaluated = qc_passed + qc_failed;
@@ -75,6 +78,8 @@ export function buildRunRecord(params: {
       pass_rate,
       avg_l1_score,
       avg_l2_score,
+      was_sampled,
+      not_evaluated,
       input_tokens: qc.input_tokens,
       output_tokens: qc.output_tokens,
       total_tokens: qc.total_tokens,

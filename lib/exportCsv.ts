@@ -23,10 +23,10 @@ function csvCell(value: string): string {
 export function buildExportCsv(emails: GeneratedEmail[], qualityRun: boolean): string {
   const header = EXPORT_COLUMNS.join(",");
   const lines = emails.map((e) => {
-    let l1 = "NOT EVALUATED";
-    let l2 = "NOT EVALUATED";
+    let l1 = "NOT_EVALUATED";
+    let l2 = "NOT_EVALUATED";
     let verdict = "NOT_EVALUATED";
-    let failed = "NOT EVALUATED";
+    let failed = "";
     if (qualityRun && e.quality) {
       l1 = String(e.quality.layer1_score);
       l2 = e.quality.layer2_score < 0 ? "—" : String(e.quality.layer2_score);
