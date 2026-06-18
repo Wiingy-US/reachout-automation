@@ -35,6 +35,36 @@ export function formatCost(usd: number): string {
   return `$${usd.toFixed(3)}`;
 }
 
+// ---- INR conversion (display only — Gemini bills in USD) ----
+// Overridable via NEXT_PUBLIC_USD_TO_INR. Verified ~94.3 as of June 2026.
+export const USD_TO_INR = process.env.NEXT_PUBLIC_USD_TO_INR
+  ? parseFloat(process.env.NEXT_PUBLIC_USD_TO_INR)
+  : 94.3;
+
+export function usdToInr(usd: number): number {
+  return usd * USD_TO_INR;
+}
+
+export function formatINR(usd: number): string {
+  if (usd === 0) return "—";
+  const inr = usdToInr(usd);
+  if (inr < 0.01) return "<₹0.01";
+  if (inr < 1) return `₹${inr.toFixed(3)}`;
+  if (inr < 100) return `₹${inr.toFixed(2)}`;
+  return `₹${inr.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+/** Full-precision USD (shown alongside INR in detail views). */
+export function formatUSD(usd: number): string {
+  if (usd < 0.001) return "<$0.001";
+  return `$${usd.toFixed(4)}`;
+}
+
+/** Exact comma-separated token count (Indian grouping), for detail views. */
+export function formatTokensExact(n: number): string {
+  return n.toLocaleString("en-IN");
+}
+
 /** Table variant: shows "—" for zero (used in the dashboard runs table). */
 export function formatCostTable(usd: number): string {
   if (usd === 0) return "—";
