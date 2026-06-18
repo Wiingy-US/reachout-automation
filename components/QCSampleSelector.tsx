@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { estimateEvaluationCost } from "@/lib/sampling";
+import { formatINR, formatUSD } from "@/lib/costs";
 import { Button, Spinner } from "./ui";
 
 export function QCSampleSelector({
@@ -72,7 +73,10 @@ export function QCSampleSelector({
           L1 checks: free · L2 judge: {cost.estimated_calls} API call
           {cost.estimated_calls === 1 ? "" : "s"}
         </div>
-        <div>Estimated cost: {cost.formatted}</div>
+        <div>
+          Estimated cost: ~{formatINR(cost.estimated_cost_usd)}{" "}
+          <span className="opacity-70">(~{formatUSD(cost.estimated_cost_usd)})</span>
+        </div>
       </div>
 
       <Button onClick={() => onRun(mode === "all" ? "all" : sampleSize)} disabled={isRunning}>

@@ -15,7 +15,7 @@ import {
   Cell,
 } from "recharts";
 import { RunRecord, CampaignRecord, UserRecord } from "@/lib/types";
-import { formatTokens, formatCostTable } from "@/lib/costs";
+import { formatTokens, formatTokensExact, formatINR, formatUSD } from "@/lib/costs";
 import { formatDuration } from "@/lib/utils";
 import { getCheck } from "@/lib/rubric";
 import { getDatePreset, DatePreset } from "@/lib/datePresets";
@@ -42,13 +42,14 @@ function passRateClass(p: number): string {
   return "text-[#DC2626] bg-danger-light dark:bg-[#7F1D1D] dark:text-[#FCA5A5]";
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function StatCard({ label, value, accent, sub }: { label: string; value: string; accent?: boolean; sub?: string }) {
   return (
     <div className="min-w-[150px] flex-1 rounded-xl border border-light-border bg-light-surface px-5 py-4 dark:border-dark-border dark:bg-dark-surface dark:shadow-[0_1px_8px_rgba(0,0,0,0.4)]">
       <div className="text-[11px] font-medium uppercase tracking-wide text-light-text2 dark:text-dark-text3">{label}</div>
       <div className={`mt-1 text-2xl font-bold ${accent ? "text-brand dark:text-[#7B8FE8]" : "text-light-text dark:text-dark-text"}`}>
         {value}
       </div>
+      {sub && <div className="text-[11px] text-light-text3 dark:text-dark-text3">{sub}</div>}
     </div>
   );
 }
@@ -332,7 +333,7 @@ export function Dashboard() {
             <StatCard label="Emails Evaluated" value={String(summary.evaluated)} />
             <StatCard label="Avg Pass Rate" value={`${summary.avgPass}%`} />
             <StatCard label="Avg L1 / L2" value={`${summary.l1} / ${summary.l2 < 0 ? "—" : summary.l2}`} />
-            <StatCard label="Total Spend" value={formatCostTable(summary.spend)} accent />
+            <StatCard label="Total Spend" value={formatINR(summary.spend)} sub={formatUSD(summary.spend)} accent />
           </div>
 
           {filteredRuns.length === 0 ? (
@@ -456,7 +457,7 @@ export function Dashboard() {
                                     <ScorePill score={ev.avg_l2_score ?? -1} />
                                   </div>
                                 </td>
-                                <td className="px-3 py-2 font-bold text-light-text dark:text-dark-text">{formatCostTable(r.totals.total_cost_usd)}</td>
+                                <td className="px-3 py-2 font-bold text-light-text dark:text-dark-text">{formatINR(r.totals.total_cost_usd)}</td>
                                 <td className="hidden px-3 py-2 text-light-text2 dark:text-dark-text2 md:table-cell">{formatDuration(dur?.total_ms ?? 0)}</td>
                               </tr>
                               {isOpen && (
@@ -477,8 +478,14 @@ export function Dashboard() {
                                         <Field label="Succeeded" value={r.generation.succeeded} />
                                         <Field label="Failed" value={r.generation.failed} />
                                         <Field label="Batches" value={`${r.generation.total_batches} (size ${r.generation.batch_size})`} />
-                                        <Field label="Tokens" value={`${formatTokens(r.generation.input_tokens)} in · ${formatTokens(r.generation.output_tokens)} out`} />
-                                        <Field label="Cost" value={formatCostTable(r.generation.cost_usd)} />
+                                        <Field label="Input tokens" value={formatTokensExact(r.generation.input_tokens)} />
+                                        <Field label="Output tokens" value={formatTokensExact(r.generation.output_tokens)} />
+                                        {(() => {
+                                          const t = Math.max(0, r.generation.total_tokens - r.generation.input_tokens - r.generation.output_tokens);
+                                          return t > 0 ? <Field label="Thinking tokens" value={<>{formatTokensExact(t)} <span className="text-warning-text">⚠</span></>} /> : null;
+                                        })()}
+                                        <Field label="Total tokens" value={formatTokensExact(r.generation.total_tokens)} />
+                                        <Field label="Cost" value={`${formatINR(r.generation.cost_usd)}  (${formatUSD(r.generation.cost_usd)})`} />
                                         <Field label="Time" value={formatDuration(dur?.generation_ms ?? 0)} />
                                       </div>
                                       <div>
@@ -491,7 +498,14 @@ export function Dashboard() {
                                         <Field label="Avg L1" value={ev.avg_l1_score ?? "—"} />
                                         <Field label="Avg L2" value={(ev.avg_l2_score ?? -1) < 0 ? "—" : ev.avg_l2_score} />
                                         <Field label="L2 skipped (gate)" value={ev.l2_skipped_count ?? 0} />
-                                        <Field label="Cost" value={formatCostTable(ev.cost_usd)} />
+                                        <Field label="Input tokens" value={formatTokensExact(ev.input_tokens)} />
+                                        <Field label="Output tokens" value={formatTokensExact(ev.output_tokens)} />
+                                        {(() => {
+                                          const t = Math.max(0, ev.total_tokens - ev.input_tokens - ev.output_tokens);
+                                          return t > 0 ? <Field label="Thinking tokens" value={<>{formatTokensExact(t)} <span className="text-warning-text">⚠</span></>} /> : null;
+                                        })()}
+                                        <Field label="Total tokens" value={formatTokensExact(ev.total_tokens)} />
+                                        <Field label="Cost" value={`${formatINR(ev.cost_usd)}  (${formatUSD(ev.cost_usd)})`} />
                                         <Field label="Time" value={formatDuration(dur?.evaluation_ms ?? 0)} />
                                       </div>
                                       <div>
@@ -514,8 +528,8 @@ export function Dashboard() {
                                           </div>
                                         )}
                                         <SubHead>Totals</SubHead>
-                                        <Field label="Total tokens" value={formatTokens(r.totals.total_tokens)} />
-                                        <Field label="Total cost" value={formatCostTable(r.totals.total_cost_usd)} />
+                                        <Field label="Total tokens" value={formatTokensExact(r.totals.total_tokens)} />
+                                        <Field label="Total cost" value={`${formatINR(r.totals.total_cost_usd)}  (${formatUSD(r.totals.total_cost_usd)})`} />
                                         <Field label="Total time" value={formatDuration(dur?.total_ms ?? 0)} />
                                       </div>
                                     </div>

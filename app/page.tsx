@@ -8,7 +8,7 @@ import {
   QualitySummary,
 } from "@/lib/types";
 import { summarise } from "@/lib/quality";
-import { computeSessionSummary, formatCost, formatTokens } from "@/lib/costs";
+import { computeSessionSummary, formatINR, formatTokensExact } from "@/lib/costs";
 import { formatDuration } from "@/lib/utils";
 import { randomSample } from "@/lib/sampling";
 import { DEFAULT_GENERATION_PROMPT } from "@/lib/defaultPrompt";
@@ -214,7 +214,7 @@ export default function Home() {
     passRate: qualityRun && summary ? `${summary.passRate}%` : "—",
     cost:
       tokenSummary.totals.total_tokens > 0
-        ? formatCost(tokenSummary.totals.total_cost_usd)
+        ? formatINR(tokenSummary.totals.total_cost_usd)
         : "—",
   };
 
@@ -733,8 +733,8 @@ export default function Home() {
                 />
               </div>
               <p className="mt-1 text-xs text-light-text3 dark:text-dark-text3">
-                Tokens used this session: {formatTokens(tokenSummary.breakdown.email_generation.total_tokens)}{" "}
-                · Estimated cost so far: ~{formatCost(tokenSummary.breakdown.email_generation.total_cost_usd)}
+                Tokens used: {formatTokensExact(tokenSummary.breakdown.email_generation.total_tokens)}{" "}
+                · Cost so far: ~{formatINR(tokenSummary.breakdown.email_generation.total_cost_usd)}
               </p>
             </div>
           )}
