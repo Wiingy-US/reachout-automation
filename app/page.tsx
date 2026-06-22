@@ -652,7 +652,7 @@ export default function Home() {
           step={2}
           id="step-2"
           title="Step 2 — Upload journalist CSV"
-          subtitle="Up to 200 rows. Required columns are validated; rows missing critical fields are flagged."
+          subtitle="Up to 600 rows. Required columns are validated; rows missing critical fields are flagged."
           done={!!csv && csv.missingColumns.length === 0}
         >
           <CsvUpload key={csvKey} onParsed={setCsv} disabled={generating || qcRunning} />
