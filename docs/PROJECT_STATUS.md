@@ -10,7 +10,7 @@ history.
 ## 1. What this product is
 
 A **single-session, stateless web tool** that turns a campaign research-report PDF
-into up to 200 personalised journalist pitch emails, runs a 29-check quality
+into up to 600 personalised journalist pitch emails, runs a 29-check quality
 rubric over them, and exports an AppScript-ready CSV.
 
 Core loop: **PDF in → generation prompt + data-facts summary out → personalised

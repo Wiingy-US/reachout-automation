@@ -16,7 +16,7 @@ export const REQUIRED_COLUMNS = [
 // Fields whose absence makes a row unusable for generation (spec 3.2).
 export const CRITICAL_FIELDS = ["email", "first_name", "about_bio"] as const;
 
-export const MAX_ROWS = 200;
+export const MAX_ROWS = 600;
 
 function normaliseHeader(h: string): string {
   return h.trim().toLowerCase().replace(/\s+/g, "_");

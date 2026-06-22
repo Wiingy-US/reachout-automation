@@ -1,7 +1,7 @@
 # Digital PR Outreach — MVP
 
 Single-session, stateless web tool that turns a generation prompt + data facts
-summary into up to 200 personalised journalist pitch emails, runs a 29-check
+summary into up to 600 personalised journalist pitch emails, runs a 29-check
 quality rubric over them, and exports an AppScript-ready CSV. No login, no
 database — when you close the tab, everything is gone.
 
@@ -12,7 +12,7 @@ database — when you close the tab, everything is gone.
 
 1. **Campaign setup** — paste the `generation_prompt` and the `data_facts_summary`
    (both manual, entered by you).
-2. **Upload journalist CSV** (≤ 200 rows) — required columns are validated.
+2. **Upload journalist CSV** (≤ 600 rows) — required columns are validated.
 3. **Pick batch size & generate** — batched Gemini calls with a live progress bar.
 4. **Review** generated emails in the preview table (HTML rendered in sandboxed iframes).
 5. **Run quality check** — Layer 1 deterministic checks server-side, then the
